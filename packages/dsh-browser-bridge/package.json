@@ -7,12 +7,16 @@
   "exports": {
     ".": "./lib/index.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "default": "./lib/client.js"
+    }
   },
   "files": [
     "lib/**/*.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "lib/client.js"
   ],
   "keywords": [
     "dsh-plugin",
@@ -26,6 +30,12 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ]
     }
   },
   "scripts": {

@@ -93,6 +93,7 @@ kind: "project-plan"
 - [ ] 扩展能被 Chrome 和 Edge 从同一目录加载。
 - [ ] 宿主插件能被 DSH profile 作为 bundle 加载，工具出现在模型工具列表。
 - [ ] 扩展加载后自动连接（无需配对码）；DSH 重启后自动重连。
+- [ ] 输入框 `@` 能列出并插入当前打开的标签页。
 - [ ] `browser_tabs` 能列出至少 2 个窗口的标签，并能切换。
 - [ ] `browser_snapshot` 返回可交互元素和 `ref`；`browser_click` 能用 `ref` 点中。
 - [ ] `browser_type` 对 React 受控输入框有效（原生 setter + input 事件）。

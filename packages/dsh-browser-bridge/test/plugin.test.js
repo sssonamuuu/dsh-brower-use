@@ -36,6 +36,18 @@ test('plugin apply starts the bridge, registers tools, and disposes cleanly', as
       if (typeof dispose === 'function') disposers.push(dispose)
       return dispose
     },
+    inject(deps, callback) {
+      if (deps.includes('webServer')) {
+        callback({
+          webServer: { register: () => () => {} },
+          effect: (fn) => {
+            const dispose = fn()
+            if (typeof dispose === 'function') disposers.push(dispose)
+            return dispose
+          },
+        })
+      }
+    },
   }
 
   await apply(ctx, { port: 0, portRange: 1, stateDir })

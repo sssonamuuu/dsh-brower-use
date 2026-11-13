@@ -74,6 +74,23 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 { "ok": true, "protocol": 1, "clients": 1, "active": { "browser": "chromium", "brand": "Chrome", "version": "146" } }
 ```
 
+### `GET /api/browser-bridge/tabs`（DSH Web Host 路由）
+
+给 Web 输入框 `@` 菜单用，不在 bridge 端口上，而在 DSH Web Server 上（同源）：
+
+```json
+{
+  "ok": true,
+  "tabs": [
+    { "id": 123, "windowId": 1, "index": 0, "title": "App", "url": "http://localhost:3000/", "active": true }
+  ]
+}
+```
+
+- 只允许同源请求（`Origin` 为空或等于 `Host`）或 `null`（桌面壳），其他 Origin 返回 `403`。
+- 扩展未连接时返回 `503`，`error: "NO_CLIENT"`。
+- 只读；不会操作标签页。
+
 ### `GET /ws?token=…`
 
 WebSocket upgrade：

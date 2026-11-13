@@ -7,6 +7,38 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-13 — 支持在输入框 @ 当前标签页
+
+### 背景
+
+用户问「插件装了，为什么还是不能 @ 我现在开着的 tab」。`browser_*` 工具只能让模型主动
+去查，`@` 菜单需要单独的**客户端 source**，不在 Host 工具里。
+
+### 实现
+
+1. Host 增加同源只读路由 `GET /api/browser-bridge/tabs`，调用
+   `bridge.command('tabs.list')`；只允许同源/`null` Origin，扩展未连接返回 503。
+2. 包增加 client half `lib/client.js`（手写 `window.__ModuleLoader__.load` CJS factory），
+   通过 `dsh.client` 声明加载，注册 `@` source `browser-tab`。
+3. 候选：active 优先，显示标题、URL、窗口；选中插入
+   `[Browser tab id=123] 标题 — URL`，模型据此调用 `browser_snapshot {tabId:123}`。
+4. 无需构建：client.js 无 React/无 import，直接由 `dsh-client-modules` 提供。
+
+### 验证
+
+- 单测 `client-source.test.js`：候选过滤、`onPick`、`codec.serialize`。
+- 真实 Host 路由：Edge 已连接时返回 tabs JSON；断开时 `503 NO_CLIENT`。
+- `/api/browser-bridge/client-status` 显示 clientPath 已被 DSH client-modules 识别。
+- 41/41 tests pass。
+
+### 注意
+
+- `@` source 属于 Web 客户端 bundle；**改完需要刷新 DSH 页面**（或等 client-modules HMR）
+  才能加载新 source。
+- 如果页面在桌面壳里，client bundle 通过 shell carrier 加载，不经过 `/plugins` HTTP 路由。
+
+---
+
 ## 2026-11-13 — 去掉配对码：自动配对
 
 ### 背景

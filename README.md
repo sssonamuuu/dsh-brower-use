@@ -37,6 +37,7 @@
 | 看网络 | `browser_network` | 请求列表、headers、状态码、耗时、响应体（文本/JSON） |
 | 等待 | `browser_wait` | 等 selector / 文本 / console 报错 / 网络空闲 |
 | 状态 | `browser_status` | 连接状态、浏览器、自动配对状态、排查信息 |
+| `@` 提标签页 | `@` 菜单 | 在输入框输入 `@` 选择当前打开的标签页，插入 `[Browser tab id=…]` 引用 |
 
 ## 快速开始
 
@@ -67,6 +68,7 @@ Chrome：`chrome://extensions` → 打开「开发者模式」→「加载已解
 1. 扩展加载后会自动扫描 `127.0.0.1:47821-47830`，找到 DSH bridge。
 2. bridge 只对**扩展 Origin**（或带显式客户端头的本机进程）下发 token；网页 Origin 拿不到。
 3. 扩展用 token 连上 WS，状态变绿 `ON`，就可以让我「看下当前页面的报错」了。
+4. 在 DSH 输入框里输入 `@`，菜单里会出现「浏览器标签页」分组，选一个就能把当前 tab 作为上下文提到对话里。
 
 **不需要输入配对码。** 配对码只保留为后备：如果自动连接失败（旧浏览器、扩展 Origin
 被策略改掉等），在 DSH 里调用 `browser_status` 拿 6 位码，填到扩展 Options 里即可。
@@ -116,6 +118,7 @@ packages/dsh-browser-bridge/    DSH Host 插件
   lib/ws.js                     零依赖 WebSocket 服务端实现
   lib/browser-state.js          console / network 事件缓冲
   lib/tools.js                  模型工具定义与格式化
+  lib/client.js                 Web 客户端 @ 标签页 source
   test/                         node:test 单元 + 集成测试
 docs/                           计划、协议、开发日志
 scripts/                        独立调试脚本

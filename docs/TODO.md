@@ -56,6 +56,7 @@ kind: "project-todo"
 - [x] `browser_console`（级别过滤、增量、清空）
 - [x] `browser_network`（列表、详情、body、清空、过滤）
 - [x] `browser_wait`（selector/text/console_error/network_idle）
+- [x] Web 输入框 `@` 标签页 source（`lib/client.js` + `/api/browser-bridge/tabs`）
 - [x] `browser_press` / `browser_scroll`
 - [x] `ref` 生命周期与 stale 处理
 
@@ -68,9 +69,10 @@ kind: "project-todo"
 - [x] 插件 apply 生命周期测试
 - [x] 工具 schema 子集校验
 - [x] 扩展静态检查（manifest、node --check、协议版本）
-- [x] 真实 Chrome 端到端（临时 profile，40 tests + 手工工具矩阵）
+- [x] 真实 Chrome 端到端（临时 profile，41 tests + 手工工具矩阵）
 - [x] Edge 冒烟（Edge 157，同一份扩展目录）
 - [x] 自动配对实测（隔离 47830 桥，扩展无 token 启动 → 自动领取 64 hex token → 连接）
+- [x] `@` 标签页 source 单测 + Host 路由实测（返回 Edge 当前 tabs）
 - [x] 网页 Origin 拒绝（WS upgrade 403）
 - [x] MV3 service worker reload 后自动重连
 - [x] CSP 页面 `CSP_BLOCKED` 实测（DOM 工具正常）
@@ -100,7 +102,7 @@ kind: "project-todo"
 - [ ] 侧栏 Browser Live 面板（DSH client 插件 API）
 - [ ] 按站点授权（默认只读）
 - [ ] `chrome.debugger` 可选模式（trusted input / 完整网络 / 整页截图）
-- [ ] `@` 菜单注入标签页
+- [x] `@` 菜单注入标签页（client source）
 - [ ] 多客户端（多浏览器同时连接）路由
 - [ ] Shadow DOM / iframe 支持
 - [ ] 网络 body 独立异步事件的状态提示（“body 稍后到”）

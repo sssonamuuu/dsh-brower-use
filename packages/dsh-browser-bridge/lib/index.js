@@ -59,6 +59,58 @@ export async function apply(ctx, rawConfig = {}) {
     )
   }
 
+
+  // Serve the open-tab list to the Web @ menu. The client source lives in
+  // lib/client.js and fetches this same-origin route, so no sensitive tab data
+  // crosses an unauthenticated cross-origin boundary.
+  ctx.inject(['webServer'], (webCtx) => {
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/api/browser-bridge/client-status',
+      resource: async (request) => {
+        const origin = request.headers.get('origin')
+        const host = request.headers.get('host')
+        if (origin && origin !== `http://${host}` && origin !== `https://${host}` && origin !== 'null') {
+          return jsonResponse({ ok: false, error: 'forbidden' }, 403)
+        }
+        const clientModules = webCtx.get('clientModules') ?? ctx.get('clientModules')
+        let clientPath = null
+        let error = null
+        try {
+          clientPath = clientModules?.clientPath?.('dsh-browser-bridge') ?? null
+        } catch (problem) {
+          error = problem instanceof Error ? problem.message : String(problem)
+        }
+        return jsonResponse({ ok: true, hasService: Boolean(clientModules), clientPath, error })
+      },
+    }), 'browser-bridge: client status route')
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/api/browser-bridge/tabs',
+      resource: async (request) => {
+        const origin = request.headers.get('origin')
+        const host = request.headers.get('host')
+        const sameOrigin = origin === `http://${host}` || origin === `https://${host}`
+        if (origin && !sameOrigin && origin !== 'null') {
+          return jsonResponse({ ok: false, error: 'forbidden' }, 403)
+        }
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405, { allow: 'GET, HEAD' })
+        }
+        try {
+          const data = await bridge.command('tabs.list', {}, { timeoutMs: 5000 })
+          return jsonResponse({ ok: true, tabs: data.tabs ?? [] }, 200)
+        } catch (error) {
+          const code = error?.code ?? 'NO_CLIENT'
+          return jsonResponse(
+            { ok: false, error: code, message: error instanceof Error ? error.message : String(error), tabs: [] },
+            code === 'NO_CLIENT' ? 503 : 500,
+          )
+        }
+      },
+    }), 'browser-bridge: @ tabs route')
+  })
+
   await ctx.effect(async () => {
     if (startError) {
       logger?.warn?.(
@@ -93,6 +145,18 @@ function normalizeConfig(raw) {
 function toInt(value, fallback) {
   const number = Number(value)
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : fallback
+}
+
+function jsonResponse(value, status = 200, extra = {}) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...extra,
+    },
+  })
 }
 
 export { BridgeServer, SYSTEM_PROMPT }

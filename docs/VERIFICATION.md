@@ -18,7 +18,7 @@ kind: "verification-record"
 node --test packages/dsh-browser-bridge/test/*.test.js
 ```
 
-结果：**40 tests / 40 pass / 0 fail**（约 4.2s）。
+结果：**41 tests / 41 pass / 0 fail**（约 4.2s）。
 
 覆盖：
 
@@ -27,6 +27,7 @@ node --test packages/dsh-browser-bridge/test/*.test.js
 - 命令往返、超时、断线 reject；
 - console/network 事件缓冲、合并、过滤、截断；
 - 13 个工具的参数校验、格式化、截图落盘；
+- `@` 标签页 client source：候选过滤、onPick、codec 序列化；
 - 插件 `apply` 的启动/工具注册/卸载、带未完成 WebSocket 的 `stop()` 不挂起；
 - 扩展 manifest、协议版本、全部 JS `node --check`、icon PNG。
 
@@ -144,14 +145,26 @@ node scripts/e2e-chrome.mjs --auto
 没有输入任何配对码；`/hello` 对扩展 Origin 下发了 token，扩展存入
 `chrome.storage.local` 并建立 WS。隔离桥 `/health` 显示 `clients: 1`。
 
-## 3.3 CSP 页面
+## 3.3 `@` 标签页
+
+- Host 路由 `GET http://127.0.0.1:56668/api/browser-bridge/tabs`（同源、无浏览器扩展
+  Origin）在 Edge 已连接时返回真实 tabs：`{ ok:true, tabs:[…] }`；扩展断开时返回
+  `503 NO_CLIENT`。
+- `client.js` 单测：输入两枚 tab，`@` source 生成候选、按 query 过滤、`onPick` 插入
+  `[Browser tab id=…]`、`codec.serialize` 生成模型文本。
+- `GET /api/browser-bridge/client-status` 返回：
+  `{"ok":true,"hasService":true,"clientPath":"/Users/.../lib/client.js","error":null}`，
+  说明 client bundle 已进入 DSH client-modules 图。
+- UI 侧需要刷新 DSH 页面一次让新 client source 加载；输入 `@` 后应出现「浏览器标签页」分组。
+
+## 3.4 CSP 页面
 
 `http://127.0.0.1:8099/csp` 返回 `Content-Security-Policy: script-src 'self'`：
 
 - `browser_eval` → `Error: CSP_BLOCKED: Evaluating a string as JavaScript violates...`；
 - `browser_snapshot` → 正常工作（DOM 工具不受页面 CSP 影响）。
 
-## 3.4 DSH 重启
+## 3.5 DSH 重启
 
 DSH 进程重启后：
 

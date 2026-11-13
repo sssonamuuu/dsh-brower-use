@@ -71,6 +71,7 @@ Chrome」，必须用独立 `--user-data-dir` 重启 —— 现有标签页和�
 | `content/relay.js` | ISOLATED | 校验 `window.postMessage` 来源，转发到 background | MAIN 不能直接用 `chrome.runtime`；隔离世界是可信边界 |
 | `background.js` | SW | WS、重连、命令路由、`scripting.executeScript`、tab 操作、截图 | 唯一能同时访问 `chrome.*` 和网络的地方 |
 | `popup/options` | extension page | 自动连接、状态、后备配对/token/端口 | 用户操作界面 |
+| `packages/.../lib/client.js` | DSH Web client | 注册 `@` 标签页 source，调用 Host 同源 `/api/browser-bridge/tabs` | 输入框候选菜单属于浏览器 UI，不是 Host 工具 |
 
 `background.js` 不把浏览器差异暴露给 Host：握手时只声明
 `browser: "chromium"`、`brand`、`version`、`caps`。Host 永远不写 `if (browser === …)`。
@@ -143,6 +144,25 @@ Host 侧缓冲的原因：
 
 明确信任假设：**能读到 `state.json` 的本机进程已经拥有同等权限**。这不是防本机恶意软件的
 方案，是防网页/局域网误连的方案。
+
+## 6.2 `@` 标签页如何工作
+
+```
+Web composer 输入 @
+  → client-modules 加载 dsh-browser-bridge/lib/client.js
+  → inputTriggers.registerSource({ trigger:'@', name:'browser-tab' })
+  → fetch('/api/browser-bridge/tabs')            （同源，带 DSH 会话）
+  → Host webserver route
+  → bridge.command('tabs.list')                  （WS 到扩展）
+  → 返回 [{id,title,url,active,…}]
+  → 候选行「浏览器标签页」
+  → 选中插入 [Browser tab id=123] 标题 — URL
+  → 模型看到引用，调用 browser_snapshot {tabId:123}
+```
+
+Host 路由是精确路径 `/api/browser-bridge/tabs`，只允许同源或 `null` Origin，避免其他网页读取
+标签页标题/URL。`lib/client.js` 是手写的 `window.__ModuleLoader__.load` 客户端 bundle，
+不依赖 React，也不需要构建步骤。
 
 ## 7. 浏览器兼容策略
 
