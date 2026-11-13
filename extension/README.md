@@ -19,13 +19,14 @@ kind: "extension-guide"
 > `scripts/e2e-chrome.mjs` 用的是 CDP `Extensions.loadUnpacked`（需要
 > `--enable-unsafe-extension-debugging` + `--remote-debugging-pipe`），仅用于开发验证。
 
-## 配对
+## 自动连接
 
-1. DSH 里调用 `browser_status` 拿 6 位配对码。
-2. 点扩展图标 → 输入配对码 → Pair。
-3. 状态变绿 `ON`。
+1. 扩展加载后自动扫描 `127.0.0.1:47821-47830`。
+2. 找到 DSH bridge 后，bridge 只向扩展 Origin 下发 token（网页 Origin 拿不到）。
+3. 扩展用 token 连 WS，状态变绿 `ON`。
 
-配对成功后 token 存在 `chrome.storage.local`；DSH 重启后自动重连。
+**正常不需要配对码。** 只有自动连接失败时，才在 DSH 里调用 `browser_status`，把 6 位码
+填到扩展 Options 作为后备。token 存在 `chrome.storage.local`；DSH 重启后自动重连。
 
 ## 权限
 

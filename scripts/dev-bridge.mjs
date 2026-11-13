@@ -29,9 +29,9 @@ bridge.on('browser-event', (event) => {
 
 await bridge.start()
 console.log(`[dev] bridge ready: ${bridge.url}`)
-console.log(`[dev] pairing code: ${bridge.pairingCode}`)
+console.log(`[dev] fallback pairing code: ${bridge.pairingCode}`)
 console.log(`[dev] token file: ${bridge.stateFile}`)
-console.log('[dev] load extension/ in Chrome, enter the pairing code, then run DSH tools against this bridge')
+console.log('[dev] load extension/ in Chrome; it auto-connects (pairing code is only a fallback)')
 
 const stop = async () => {
   console.log('\n[dev] stopping…')

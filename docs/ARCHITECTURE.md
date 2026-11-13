@@ -31,7 +31,7 @@ kind: "project-architecture"
 │ DSH Host                                                     │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │ bridge-server.js                                       │  │
-│  │  HTTP /hello /pair /health + WS /ws + 配对 + 限速       │  │
+│  │  HTTP /hello /pair /health + WS /ws + 自动配对/限速     │  │
 │  └──────────────────────────┬─────────────────────────────┘  │
 │                             │                                │
 │  ┌──────────────────────────▼─────────────────────────────┐  │
@@ -70,7 +70,7 @@ Chrome」，必须用独立 `--user-data-dir` 重启 —— 现有标签页和�
 | `content/collector.js` | MAIN | hook `console`、`window.onerror`、`unhandledrejection`、`fetch`、XHR | 隔离世界改 `console` 抓不到页面自己的日志 |
 | `content/relay.js` | ISOLATED | 校验 `window.postMessage` 来源，转发到 background | MAIN 不能直接用 `chrome.runtime`；隔离世界是可信边界 |
 | `background.js` | SW | WS、重连、命令路由、`scripting.executeScript`、tab 操作、截图 | 唯一能同时访问 `chrome.*` 和网络的地方 |
-| `popup/options` | extension page | 配对、状态、token/端口配置 | 用户操作界面 |
+| `popup/options` | extension page | 自动连接、状态、后备配对/token/端口 | 用户操作界面 |
 
 `background.js` 不把浏览器差异暴露给 Host：握手时只声明
 `browser: "chromium"`、`brand`、`version`、`caps`。Host 永远不写 `if (browser === …)`。
@@ -118,15 +118,31 @@ Host 侧缓冲的原因：
 | 层 | 措施 |
 |---|---|
 | 网络 | 只 listen `127.0.0.1`；不提供公网绑定 |
-| 配对 | 6 位配对码，5 次/分钟/IP，成功后发 32 字节 token |
+| 自动配对 | `/hello` 只对扩展 Origin 或带 `x-dsh-bridge-client` 头的本机客户端下发 token；网页 Origin 拿不到 token |
+| WS Origin | WS upgrade 拒绝任何 `http(s)`/`null` Origin；网页不能冒充 DSH 指挥扩展 |
 | Token | `~/.dsh/browser-bridge/state.json` 0600；WS 查询参数校验；不写日志 |
-| Origin | `/pair` 只给 `chrome-extension://` 来源加 CORS 头；网页无法读取响应 |
+| 手动后备 | 6 位配对码、5 次/分钟/IP、每次启动轮换；仅在自动配对失败时使用 |
 | 扩展 | 用户显式加载解压扩展；`<all_urls>` 是读已登录页面的必要权限 |
 | 数据 | 不落盘 console/network；截图只落用户工作区的 `.dsh-browser/` |
 | 生命周期 | 插件卸载时关闭 HTTP/WS、拒绝所有 pending 命令 |
 
-明确信任假设：**能读到 `~/.dsh/browser-bridge/state.json` 的本机进程已经拥有同等权限**。
-这不是防本机恶意软件的方案，是防网页/局域网误连的方案。
+### 6.1 为什么不是「完全无鉴权」
+
+浏览器里的任意网页也能请求 `127.0.0.1`。如果 bridge 不区分谁在连，一个恶意页面就能：
+
+1. 连上本地 WS，冒充 DSH 给扩展发 `page.eval` / `page.click`；
+2. 读取用户的标签页、Cookie 所在页面内容。
+
+所以「完全自动检测、不要 token」并不安全。自动配对把鉴权变成用户无感，而不是取消鉴权：
+
+- **扩展**用自己的 `chrome-extension://` Origin 拿到 token；网页的 `http(s)` Origin
+  既拿不到 token（CORS 只对扩展 Origin 放行），也过不了 WS 的 Origin 检查。
+- **本机进程**（Node/CLI）没有 Origin，或用显式 `x-dsh-bridge-client: auto` 头；
+  它本来就能读 `~/.dsh/browser-bridge/state.json`，属于同一信任层级。
+- **恶意扩展**可以拿到 token，但它本来就有 `<all_urls>` 权限，不是这个桥能防的边界。
+
+明确信任假设：**能读到 `state.json` 的本机进程已经拥有同等权限**。这不是防本机恶意软件的
+方案，是防网页/局域网误连的方案。
 
 ## 7. 浏览器兼容策略
 

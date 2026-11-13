@@ -35,7 +35,7 @@ function render(next) {
     ? `${next.browser?.brand ?? 'Chromium'} ${next.browser?.browserVersion ?? ''} · 已连接`
     : next.tokenSet
       ? '已保存 token，等待连接'
-      : '尚未配对'
+      : '正在自动发现 DSH'
   $('portLabel').textContent = next.port ? `127.0.0.1:${next.port}` : ''
   $('versionLabel').textContent = `v${next.extensionVersion} · bridge ${next.serverVersion ?? '?'}`
   $('pairSection').hidden = next.connected
@@ -50,7 +50,7 @@ function render(next) {
       ? 'DSH 现在可以读取和操作当前标签页。'
       : next.tokenSet
         ? '后台会自动重连；也可以点“重连”。'
-        : '输入 DSH 显示的 6 位配对码完成首次连接。'
+        : '扩展会自动发现本机 DSH 并连接；如果一直停在这里，用下面的配对码作为后备。'
   $('statusHint').textContent = hint
   const errorBox = $('error')
   errorBox.hidden = !next.lastError || next.state === 'connected'

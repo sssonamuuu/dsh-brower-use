@@ -198,7 +198,7 @@ class ToolRuntime {
   #status() {
     return browserTool(
       'browser_status',
-      'Check the DSH Browser Bridge: whether the browser extension is connected, which browser it is, and the current pairing code. Call this first when any browser_* tool reports that no extension is connected.',
+      'Check the DSH Browser Bridge: whether the browser extension is connected and which browser it is. Call this first when any browser_* tool reports that no extension is connected. Extensions auto-pair when loaded; a pairing code remains only as a manual fallback.',
       objectSchema({}),
       async () => {
         if (!this.#bridge) {
@@ -219,11 +219,16 @@ class ToolRuntime {
           )
           lines.push(`    caps: ${client.caps.join(', ')}`)
         }
-        lines.push(`Pairing code: ${status.pairingCode}`)
+        lines.push(`Auto-pair: ${status.autoPair === false ? 'disabled (manual pairing required)' : 'enabled'}`)
+        if (status.autoPair === false) {
+          lines.push(`Manual pairing code: ${status.pairingCode}`)
+        }
         if (!status.paired) {
           lines.push(
-            'To connect: open the DSH Browser Bridge extension in Chrome/Edge, click the toolbar icon, enter the 6-digit code above, then click Pair.',
-            'The extension must be loaded from this repository\'s extension/ directory via chrome://extensions (developer mode).',
+            'To connect: load the DSH Browser Bridge extension from this repository\'s extension/ directory (chrome://extensions → Developer mode → Load unpacked), then click its toolbar icon.',
+            status.autoPair === false
+              ? 'Enter the manual pairing code above and click Pair.'
+              : 'It should connect automatically within a few seconds. If it does not, open the extension options and use the manual pairing code shown by browser_status.',
           )
         } else {
           lines.push('The extension is ready. Use browser_tabs to see open tabs.')

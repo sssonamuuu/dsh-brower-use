@@ -10,7 +10,7 @@ kind: "protocol-reference"
 所有消息是 UTF-8 JSON 文本。WebSocket 端口默认 `47821`，Host 在 `47821..47830`
 范围内选第一个可用端口；扩展按同一范围扫描。
 
-## 1. HTTP（发现与配对）
+## 1. HTTP（发现与自动配对）
 
 ### `GET /hello`
 
@@ -23,15 +23,24 @@ kind: "protocol-reference"
   "app": "dsh-browser-bridge",
   "protocol": 1,
   "version": "0.1.0",
+  "autoPair": true,
   "pairing": true,
   "port": 47821
 }
 ```
 
-- `pairing: false` 表示当前不允许新配对（已有客户端 / 配对被禁用）。
+- `autoPair: true`：扩展可以自动领取 token，无需用户输入配对码。
+- `token` 字段是**条件返回**的：只有请求的 `Origin` 是 `chrome-extension://…`
+  （或带 `x-dsh-bridge-client: auto` 头的本机客户端）才出现；普通网页 Origin 不返回。
+- `pairing: false` 表示当前不允许**手动**配对（已有客户端 / 配对被禁用）。
 - 端口不是 47821 时，`port` 是实际端口，扩展直接使用。
 
-### `POST /pair`
+> 自动配对仍需要 token。`/hello` 的 CORS 只对扩展 Origin 放行，网页读不到 token；
+> 这是「无感」而不是「无鉴权」。
+
+### `POST /pair`（手动后备）
+
+正常流程不需要它；只有自动配对失败时使用。
 
 请求体：
 
@@ -67,7 +76,12 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 
 ### `GET /ws?token=…`
 
-WebSocket upgrade。token 不匹配返回 `401` 并销毁 socket。
+WebSocket upgrade：
+
+- 请求带 `Origin` 且不是 `chrome-extension://…` / `extension://…` /
+  `moz-extension://…` → `403`，网页不能冒充 DSH。
+- 无 `Origin` 视为本机进程（CLI/测试），允许，但仍需 token。
+- token 不匹配返回 `401` 并销毁 socket。
 
 ## 2. WebSocket 握手
 

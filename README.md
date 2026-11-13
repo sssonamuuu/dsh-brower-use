@@ -12,7 +12,7 @@
 │  你的 Chrome / Edge          │        │  DSH Host 进程                 │
 │  ┌────────────────────────┐  │  WS    │  ┌────────────────────────┐  │
 │  │ DSH Browser Bridge 扩展│◄─┼────────┼─►│ dsh-browser-bridge 插件 │  │
-│  │ collector (MAIN world) │  │127.0.0.1│  │ 工具 + 事件缓冲 + 配对   │  │
+│  │ collector (MAIN world) │  │127.0.0.1│  │ 工具 + 事件缓冲 + 自动配对│  │
 │  │ relay / background     │  │  token  │  └────────────────────────┘  │
 │  └────────────────────────┘  │        │             │                  │
 │  你当前的标签页、登录态、DevTools│        │             ▼                  │
@@ -36,7 +36,7 @@
 | 看 console | `browser_console` | error / warn / info / log，带堆栈，可清空 |
 | 看网络 | `browser_network` | 请求列表、headers、状态码、耗时、响应体（文本/JSON） |
 | 等待 | `browser_wait` | 等 selector / 文本 / console 报错 / 网络空闲 |
-| 状态 | `browser_status` | 连接状态、浏览器、配对码、排查信息 |
+| 状态 | `browser_status` | 连接状态、浏览器、自动配对状态、排查信息 |
 
 ## 快速开始
 
@@ -62,20 +62,23 @@ Chrome：`chrome://extensions` → 打开「开发者模式」→「加载已解
 > Chrome 137+ 正式版已移除 `--load-extension` 命令行开关，必须手动「加载已解压」；
 > [Chromium 公告](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY/m/S0ET5wPjCAAJ)。
 
-### 3. 配对
+### 3. 自动连接（通常无需操作）
 
-1. 在 DSH 里让我调用 `browser_status`，拿到 6 位配对码。
-2. 点浏览器工具栏里的扩展图标 → 输入配对码 → Pair。
-3. 扩展状态变成绿色 `ON`，就可以让我「看下当前页面的报错」了。
+1. 扩展加载后会自动扫描 `127.0.0.1:47821-47830`，找到 DSH bridge。
+2. bridge 只对**扩展 Origin**（或带显式客户端头的本机进程）下发 token；网页 Origin 拿不到。
+3. 扩展用 token 连上 WS，状态变绿 `ON`，就可以让我「看下当前页面的报错」了。
 
-配对码每次 DSH 启动时轮换；token 持久化在 `~/.dsh/browser-bridge/state.json`（0600），
-所以 DSH 重启后扩展会自动重连，不需要重新配对。
+**不需要输入配对码。** 配对码只保留为后备：如果自动连接失败（旧浏览器、扩展 Origin
+被策略改掉等），在 DSH 里调用 `browser_status` 拿 6 位码，填到扩展 Options 里即可。
+
+token 持久化在 `~/.dsh/browser-bridge/state.json`（0600），DSH 重启后扩展自动重连。
 
 ## 安全边界
 
 - 桥只监听 `127.0.0.1`，不监听公网。
-- WebSocket 必须带 token；token 只在配对成功时通过一次性配对码换取。
-- 配对码 6 位、5 次/分钟限速、每次宿主启动轮换。
+- WebSocket 必须带 token；token 只对 `chrome-extension://` Origin 或带 `x-dsh-bridge-client` 头的本机客户端下发，普通网页因 CORS 读不到。
+- WS upgrade 会拒绝 `http(s)` 网页 Origin，网页不能冒充 DSH 指挥扩展。
+- 配对码 6 位、5 次/分钟限速、每次宿主启动轮换，仅作为自动配对失败时的后备。
 - 扩展本身拥有 `tabs` / `scripting` / `<all_urls>` 权限，能读所有站点；这是「看你已登录页面」
   的必要代价。不适合安装到不受信任的浏览器 profile。
 - 不做云同步、不上传页面内容；所有数据只在 `127.0.0.1` 上走。
@@ -105,11 +108,11 @@ extension/                      MV3 扩展（Chrome / Edge 共用）
   content/collector.js          MAIN world：console / fetch / XHR / 错误采集
   content/relay.js              ISOLATED world：把事件转给 background
   background.js                 WS 连接、重连、命令执行、tab 管理
-  options.html/js               配对、token、端口配置
-  popup.html/js                 状态与快捷配对
+  options.html/js               自动连接、后备配对、token/端口
+  popup.html/js                 状态与后备配对
 packages/dsh-browser-bridge/    DSH Host 插件
   lib/index.js                  cordis 插件入口 + 工具注册
-  lib/bridge-server.js          HTTP + WebSocket 服务、配对、客户端管理
+  lib/bridge-server.js          HTTP + WebSocket 服务、自动配对、客户端管理
   lib/ws.js                     零依赖 WebSocket 服务端实现
   lib/browser-state.js          console / network 事件缓冲
   lib/tools.js                  模型工具定义与格式化

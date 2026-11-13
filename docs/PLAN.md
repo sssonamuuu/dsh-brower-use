@@ -44,7 +44,7 @@ kind: "project-plan"
 |---|---|---|
 | D1 | 浏览器扩展 + 本地 WS 桥，不用 CDP 端口 | 保留现有标签/登录态；Chrome 136+ 限制调试端口；扩展可长期驻留 |
 | D2 | WS 服务在 Host 侧，扩展主动外连 | 扩展不能监听端口；Host 可绑定 127.0.0.1 并统一鉴权 |
-| D3 | 配对码换持久 token | 首次 UX 简单，之后自动重连；token 不暴露给网页 |
+| D3 | 自动配对：扩展 Origin 领 token，配对码仅后备 | 用户零操作；网页 Origin 既读不到 token 也过不了 WS Origin 检查 |
 | D4 | console/network 用 MAIN world 注入采集 | 隔离世界改 `console` 抓不到页面日志；MAIN world 可靠且可与 DevTools 并存 |
 | D5 | 命令走 `tabId + frameId` 统一寻址，握手带 caps | Host 不写浏览器分支；后续 Firefox/Safari 只实现扩展侧 |
 | D6 | Host 侧做事件缓冲 | 工具查询是同步读取；扩展休眠/重连不丢最近的报错 |
@@ -62,7 +62,7 @@ kind: "project-plan"
 ### P1 — 通路与基础工具（v0.1 必须）
 
 - Host：HTTP `/hello` `/pair` `/health`、WS `/ws`、token、单客户端管理、命令超时。
-- 扩展：MV3 骨架、自动发现端口、配对、断线重连、心跳、tab 管理。
+- 扩展：MV3 骨架、自动发现端口、自动领 token、断线重连、心跳、tab 管理。
 - 工具：`browser_status`、`browser_tabs`、`browser_snapshot`、`browser_read`、
   `browser_click`、`browser_type`、`browser_eval`、`browser_screenshot`。
 - 验收：在真实 Chrome 里对 `localhost` 页面完成「列 tab → 快照 → 点按钮 → 输入 → 截图」。
@@ -92,7 +92,7 @@ kind: "project-plan"
 
 - [ ] 扩展能被 Chrome 和 Edge 从同一目录加载。
 - [ ] 宿主插件能被 DSH profile 作为 bundle 加载，工具出现在模型工具列表。
-- [ ] 配对成功后，扩展状态为已连接；DSH 重启后自动重连。
+- [ ] 扩展加载后自动连接（无需配对码）；DSH 重启后自动重连。
 - [ ] `browser_tabs` 能列出至少 2 个窗口的标签，并能切换。
 - [ ] `browser_snapshot` 返回可交互元素和 `ref`；`browser_click` 能用 `ref` 点中。
 - [ ] `browser_type` 对 React 受控输入框有效（原生 setter + input 事件）。
@@ -105,9 +105,9 @@ kind: "project-plan"
 **质量**
 
 - [ ] `node --test` 全绿；WS 分帧/掩码/64 位长度有单测。
-- [ ] 桥只 bind `127.0.0.1`；错误 token 被拒绝；配对码限速。
+- [ ] 桥只 bind `127.0.0.1`；错误 token 被拒绝；网页 Origin 被拒；配对码限速。
 - [ ] 所有扩展 JS 通过 `node --check`；manifest JSON 合法。
-- [ ] 文档包含安装、配对、排障、已知边界。
+- [ ] 文档包含安装、自动连接/后备配对、排障、已知边界。
 
 ## 6. 风险与缓解
 
@@ -118,7 +118,7 @@ kind: "project-plan"
 | 注入时机晚 | 丢失早期 console | 文档说明；`document_start` 自动注入 + 连接后补注入已有 tab |
 | 页面脚本伪造 postMessage | 污染事件缓冲 | relay 校验 `source` + 频道名；Host 侧限流、截断 |
 | 大响应体撑爆内存 | Host 卡顿 | 单条 256KB、每 tab 1000 条、工具输出再截断 |
-| 扩展权限过大 | 安全顾虑 | 本地 token、配对码、文档明示；P3 加按站点授权 |
+| 扩展权限过大 | 安全顾虑 | 自动 token + WS Origin 检查、文档明示；P3 加按站点授权 |
 | Chrome 商店政策 | 无法上架 | 以「开发者模式加载」为主，不上架 |
 
 ## 7. 时间估算

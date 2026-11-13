@@ -7,6 +7,43 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-13 — 去掉配对码：自动配对
+
+### 背景
+
+用户问「为什么非要配对码，直接检测本机 DSH 和扩展不行吗」。
+
+配对码原本是为了挡网页：任意网页也能请求 `127.0.0.1`，如果 bridge 无鉴权，网页就能
+冒充 DSH 给扩展发命令、读标签页内容。但让用户抄 6 位码确实是多余的一步。
+
+### 方案
+
+把鉴权自动化，而不是删掉鉴权：
+
+1. `/hello` 对**扩展 Origin**（或带 `x-dsh-bridge-client: auto` 头的本机客户端）返回 token；
+   普通 `http(s)` Origin 不返回 token，且 CORS 也不会放行其读取。
+2. WS upgrade 拒绝任何非扩展 Origin（`http(s)` / `null`）；网页即使拿到 token 也连不上。
+3. 扩展启动时扫描端口，自动领取 token 存 `chrome.storage.local`，直接连 WS。
+4. 配对码保留为后备：`autoPair: false` 或自动握手失败时使用。
+5. token 仍持久化在 `state.json` 0600；本机进程可读，属于同一信任层级。
+
+### 验证
+
+- 单测：`/hello` token 只给扩展/显式头；网页 Origin 拿不到；WS 网页 Origin 403；
+  `autoPair:false` 不返回 token。
+- 隔离桥 47830 + 临时扩展（`DEFAULT_PORT=47830`）+ 临时 Chrome：扩展**零 token 启动**，
+  自动领取 64 hex token 并连接，`auto token stored: yes`。
+- 真实桥 47821：用户手动加载的 Edge 157 已连接，`browser_status` 显示
+  `Auto-pair: enabled`。
+- 40/40 tests pass。
+
+### 待办
+
+- 用户 Chrome 日常 profile 手动加载扩展（无需配对）。
+- 如果扩展仍显示 `OFF`：看 Options 的 Test/端口；必要时用 `browser_status` 的后备配对码。
+
+---
+
 ## 2026-11-13 — 重启回归、Edge、SW reload、CSP
 
 ### 背景

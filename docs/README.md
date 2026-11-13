@@ -12,8 +12,8 @@ kind: "project-docs-index"
 
 1. [PLAN.md](PLAN.md) —— 范围、阶段、验收标准、明确不做的事。
 2. [ARCHITECTURE.md](ARCHITECTURE.md) —— 三层结构、为什么不用 CDP、浏览器兼容策略。
-3. [PROTOCOL.md](PROTOCOL.md) —— WS 命令/事件、配对、能力协商、错误码。
-4. [INSTALL.md](INSTALL.md) —— 安装宿主插件、加载扩展、配对、排障。
+3. [PROTOCOL.md](PROTOCOL.md) —— WS 命令/事件、自动配对、能力协商、错误码。
+4. [INSTALL.md](INSTALL.md) —— 安装宿主插件、加载扩展、自动连接/后备配对、排障。
 5. [TESTING.md](TESTING.md) —— 自动化测试与手工验收矩阵。
 6. [VERIFICATION.md](VERIFICATION.md) —— v0.1 自动化、DSH 激活、真实 Chrome 端到端记录。
 7. [TODO.md](TODO.md) —— 逐项进度（会随开发更新）。

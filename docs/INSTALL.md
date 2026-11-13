@@ -81,15 +81,23 @@ Chrome / Edge / Brave / Arc / Vivaldi 用**同一个目录**，不需要改代�
 > 手动加载为准。Chromium 公告见
 > [这里](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY/m/S0ET5wPjCAAJ)。
 
-## 3. 配对
+## 3. 自动连接（配对码仅后备）
 
-1. 在 DSH 里调用 `browser_status`，或看 DSH Host 日志：
-   `[browser-bridge] listening on ws://127.0.0.1:47821 pair=123456`。
-2. 点扩展图标 → 输入 6 位配对码 → **Pair**。
-3. 扩展弹出授权提示时确认（不同浏览器版本文案不同）。
-4. 状态变成绿色 `ON`。
+1. 扩展加载后自动扫描 `127.0.0.1:47821-47830`，找到 `/hello` 返回
+   `app: "dsh-browser-bridge"` 的端口。
+2. bridge 只对扩展 Origin（`chrome-extension://…`）或带
+   `x-dsh-bridge-client: auto` 头的本机客户端下发 token；普通网页 Origin 因 CORS
+   读不到 token。
+3. 扩展用 token 建立 WS，状态变绿 `ON`。
 
-配对成功后 token 存在 `chrome.storage.local`；Host 重启后扩展会自动重连。
+**正常不需要输入配对码。** 自动连接失败时：
+
+1. 在 DSH 里调用 `browser_status`，拿 6 位后备配对码（或看 Host 日志
+   `[browser-bridge] listening ... pair=123456`）。
+2. 扩展 Options → 输入配对码 → **Pair**。
+3. 状态变成绿色 `ON`。
+
+token 存在 `chrome.storage.local`；Host 重启后扩展会自动重连。
 
 ## 4. 验证
 
@@ -110,17 +118,19 @@ browser_console  { "level": "error", "limit": 20 }
 
 - 默认 `47821`，被占用时自动尝试 `47822..47830`。
 - 扩展扫描同一范围，找到 `/hello` 返回 `app: "dsh-browser-bridge"` 的端口。
-- 同时开两个 DSH profile 时，扩展只会连第一个配对成功的；要切换，在扩展 Options 里
-  **Forget token** 后重新配对。
+- 同时开两个 DSH profile 时，扩展会连扫描到的第一个（或 Options 里指定的端口）；
+  要切换，在扩展 Options 里 **Forget token** 后重新自动发现，或填另一个 profile 的配对码。
 
 ## 6. 排障
 
 ### 扩展显示 `OFF`
 
-1. 确认 DSH 插件已启用：`browser_status` 能返回 `listening: true`。
+1. 确认 DSH 插件已启用：`browser_status` 能返回 `listening: true` 和 `Auto-pair: enabled`。
 2. 确认没有别的进程占用端口：`lsof -nP -iTCP:47821 -sTCP:LISTEN`。
 3. 点扩展 Options → **Test**，它会扫描端口并显示 `/hello` 结果。
-4. 如果 `/hello` 正常但 WS 连不上：token 不对，Forget token 后重新配对。
+4. 如果 `/hello` 正常但 WS 连不上：点 Options → **Forget token**，等扩展自动重新发现；
+   仍失败则用 `browser_status` 的配对码手动 Pair。
+5. 如果 `Auto-pair: disabled`：profile 配置里 `autoPair: false`，只能手动配对。
 
 ### 工具报 `NO_CLIENT` / `NO_BRIDGE`
 

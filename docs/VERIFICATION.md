@@ -18,12 +18,12 @@ kind: "verification-record"
 node --test packages/dsh-browser-bridge/test/*.test.js
 ```
 
-结果：**37 tests / 37 pass / 0 fail**（约 4.2s）。
+结果：**40 tests / 40 pass / 0 fail**（约 4.2s）。
 
 覆盖：
 
 - WebSocket 握手、7/16/64 位长度、掩码帧、ping/pong、错误 token；
-- `/hello`、`/pair`（正确/错误/限速/CORS）、token 持久化、0600 权限；
+- `/hello` 自动 token 下发（扩展 Origin / 显式头 / 普通网页）、`/pair`（正确/错误/限速/CORS）、WebSocket Origin 拒绝、token 持久化、0600 权限；
 - 命令往返、超时、断线 reject；
 - console/network 事件缓冲、合并、过滤、截断；
 - 13 个工具的参数校验、格式化、截图落盘；
@@ -56,7 +56,7 @@ curl -s http://127.0.0.1:47821/health
 {"entryId":"include:browser-bridge","moduleName":"dsh-browser-bridge","enabled":true,"fiberPhase":"active","patchId":"browser-bridge"}
 ```
 
-`browser_status` 工具可调用，返回桥监听地址和配对码。
+`browser_status` 工具可调用，返回桥监听地址和 `Auto-pair: enabled`。
 
 ## 3. 真实 Chrome 端到端
 
@@ -71,7 +71,7 @@ curl -s http://127.0.0.1:47821/health
 
 | 能力 | 实测结果 |
 |---|---|
-| 真实配对路径 | options 页 → background `dsh/pair` → `POST /pair` → 存 token → WS；返回 `{ok:true,port:47821}` |
+| 真实配对路径（后备） | options 页 → background `dsh/pair` → `POST /pair` → 存 token → WS；返回 `{ok:true,port:47821}` |
 | `browser_status` | connected，显示 Chrome 146，caps 全量 |
 | `browser_tabs` list | 列出 2 个 tab，active 正确 |
 | `browser_snapshot` | 5 个交互元素，ref/name/value/selector 正确 |
@@ -106,14 +106,52 @@ curl -s http://127.0.0.1:47821/health
 - `browser_snapshot`：5 个交互元素，ref/name/value 正确；
 - `browser_click` + `browser_console`：Edge 上同样捕获 `Uncaught Error: fixture boom`。
 
-## 3.2 CSP 页面
+当前环境里，用户手动加载的 **Edge 157** 也已连上真实桥：
+
+```text
+Extension: connected
+  - Edge 157.0.0.0 (chromium) · extension 0.1.0 · MacIntel
+Auto-pair: enabled
+```
+
+## 3.2 自动配对（隔离 47830 桥）
+
+为了不打扰已连接的 Edge，使用隔离桥验证「扩展启动时没有 token」：
+
+```bash
+# 测试桥
+DSH_BRIDGE_STATE_DIR=/tmp/dsh-auto-bridge node scripts/dev-bridge.mjs --port 47830
+
+# 临时扩展副本，DEFAULT_PORT 改成 47830
+cp -R extension /tmp/dsh-ext-auto
+# 修改 /tmp/dsh-ext-auto/shared/protocol.js DEFAULT_PORT = 47830
+
+E2E_EXTENSION_PATH=/tmp/dsh-ext-auto \
+DSH_BRIDGE_PORT=47830 \
+E2E_BRIDGE_STATE=/tmp/dsh-auto-bridge/state.json \
+CHROME_PROFILE=/tmp/dsh-chrome-auto \
+node scripts/e2e-chrome.mjs --auto
+```
+
+结果：
+
+```text
+[e2e] auto-pair mode: waiting for the extension to discover the bridge and fetch a token…
+[e2e] extension connected: {"browser":"chromium","brand":"Chrome","version":"146.0.0.0"}
+[e2e] auto token stored: yes (64 hex)
+```
+
+没有输入任何配对码；`/hello` 对扩展 Origin 下发了 token，扩展存入
+`chrome.storage.local` 并建立 WS。隔离桥 `/health` 显示 `clients: 1`。
+
+## 3.3 CSP 页面
 
 `http://127.0.0.1:8099/csp` 返回 `Content-Security-Policy: script-src 'self'`：
 
 - `browser_eval` → `Error: CSP_BLOCKED: Evaluating a string as JavaScript violates...`；
 - `browser_snapshot` → 正常工作（DOM 工具不受页面 CSP 影响）。
 
-## 3.3 DSH 重启
+## 3.4 DSH 重启
 
 DSH 进程重启后：
 
@@ -137,7 +175,8 @@ DSH 进程重启后：
 
 ## 5. 尚未验证 / 已知风险
 
-- **用户日常 Chrome profile**：本轮用临时 profile 验证；用户需手动加载扩展并配对。
+- **用户日常 Chrome profile**：本轮用临时 profile 验证；用户需手动加载扩展。
+  Edge 日常 profile 已连接（见 3.1），Chrome 日常 profile 尚未实测。
 - **MV3 service worker 被回收后的自动唤醒**：做了 `chrome.runtime.reload()` 实测
   （立即重连）；没有做 Chrome 自然回收 SW 后的 1 分钟以上挂起实测。
 - **React/Vue 受控输入**：用 native setter + input/change 实现，fixture 未装 React；
@@ -154,7 +193,8 @@ node scripts/fixture-server.mjs
 
 # 3) 临时 Chrome + 自动加载扩展（会打开一个临时窗口，不影响日常 profile）
 node scripts/e2e-chrome.mjs          # 写入 token 直连（快速回归）
-node scripts/e2e-chrome.mjs --pair   # 走真实配对码 + /pair 路径
+node scripts/e2e-chrome.mjs --pair   # 走手动配对码 + /pair 后备路径
+node scripts/e2e-chrome.mjs --auto   # 扩展零 token 启动，验证自动领取（配合 E2E_* 环境变量）
 
 # 4) 另开终端，用 DSH 的 browser_* 工具操作这个临时 Chrome
 # 5) Ctrl+C 结束脚本，临时 Chrome 关闭

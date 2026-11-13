@@ -65,6 +65,7 @@ export class BridgeServer extends EventEmitter {
       heartbeatMs: 20_000,
       commandTimeoutMs: 15_000,
       pairingEnabled: true,
+      autoPair: true,
       stateDir: path.join(process.env.DSH_HOME || path.join(homedir(), '.dsh'), 'browser-bridge'),
       maxConsole: 2000,
       maxNetwork: 1000,
@@ -283,6 +284,8 @@ export class BridgeServer extends EventEmitter {
       protocol: PROTOCOL_VERSION,
       version: PACKAGE_VERSION,
       paired: this.#active != null,
+      autoPair: this.#config.autoPair !== false,
+      tokenHandoff: 'extension-origin-or-explicit-client-header',
       pairingCode: this.#auth.pairCode,
       stateFile: this.stateFile,
       clients: [...this.#clients].map((client) => ({
@@ -313,7 +316,7 @@ export class BridgeServer extends EventEmitter {
     if (cors) {
       security['Access-Control-Allow-Origin'] = origin
       security['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-      security['Access-Control-Allow-Headers'] = 'content-type'
+      security['Access-Control-Allow-Headers'] = 'content-type, x-dsh-bridge-client'
       security['Access-Control-Allow-Private-Network'] = 'true'
       security.Vary = 'Origin'
     }
@@ -330,12 +333,17 @@ export class BridgeServer extends EventEmitter {
       return
     }
     if (url.pathname === '/hello' && req.method === 'GET') {
+      const autoToken = this.#config.autoPair !== false && isAutoPairClient(req, origin)
       respondJson(res, 200, {
         app: APP_ID,
         protocol: PROTOCOL_VERSION,
         version: PACKAGE_VERSION,
         port: this.#port,
+        autoPair: this.#config.autoPair !== false,
         pairing: this.#config.pairingEnabled !== false && this.#active == null,
+        // The token is only handed to extension origins or clients that prove
+        // they are not a cross-origin web page (custom header + CORS gate).
+        ...(autoToken ? { token: this.#auth.token } : {}),
       }, security)
       return
     }
@@ -427,6 +435,15 @@ export class BridgeServer extends EventEmitter {
     }
     if (url.pathname !== '/ws' || !isWebSocketUpgrade(req)) {
       rejectUpgrade(socket, 404, 'Not Found')
+      return
+    }
+    // A browser page's WebSocket always carries an Origin. Only extension
+    // origins may use the bridge; a http(s) page must never be able to command
+    // the extension. Origin-less clients are local processes (same trust tier
+    // as reading the state file) and are allowed with the token.
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : ''
+    if (origin && !extensionOrigin(origin)) {
+      rejectUpgrade(socket, 403, 'Forbidden')
       return
     }
     const token = url.searchParams.get('token') ?? ''
@@ -629,6 +646,17 @@ function safeEqual(a, b) {
 
 function extensionOrigin(origin) {
   return origin.startsWith('chrome-extension://') || origin.startsWith('extension://') || origin.startsWith('moz-extension://')
+}
+
+/**
+ * Auto-pairing hands the token only to requests that are either from an
+ * extension origin, or that set a custom header (which a cross-origin web page
+ * cannot do without a CORS preflight this server refuses). A plain web page
+ * fetch cannot read the token.
+ */
+function isAutoPairClient(req, origin) {
+  if (extensionOrigin(origin)) return true
+  return String(req.headers['x-dsh-bridge-client'] ?? '').toLowerCase() === 'auto'
 }
 
 function normalizeClientInfo(input) {

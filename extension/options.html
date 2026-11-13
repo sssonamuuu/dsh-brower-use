@@ -48,8 +48,9 @@
         <button class="primary" id="pairBtn">Pair</button>
       </div>
       <div class="hint" id="pairHint">
-        在 DSH 会话中调用 <code>browser_status</code>，把返回的 6 位配对码填在这里。
-        配对码每次 DSH 启动都会轮换；token 会保存在扩展里，下次自动重连。
+        正常无需配对：扩展加载后会自动发现本机 DSH，并通过受 Origin 保护的握手领取 token。
+        只有自动连接失败时，才在 DSH 里调用 <code>browser_status</code> 获取 6 位配对码，
+        填到这里作为后备。
       </div>
       <div class="error" id="pairError" hidden></div>
     </div>
@@ -72,7 +73,7 @@
       </label>
       <div class="actions">
         <button class="primary" id="saveBtn">保存并连接</button>
-        <button class="danger" id="forgetBtn">忘记 token</button>
+        <button class="danger" id="forgetBtn">重置连接（清除 token）</button>
       </div>
       <div class="hint" id="saveHint"></div>
     </div>

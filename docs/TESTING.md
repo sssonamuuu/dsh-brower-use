@@ -16,11 +16,10 @@ node --test packages/dsh-browser-bridge/test/*.test.js
 | 测试 | 内容 |
 |---|---|
 | `ws.test.js` | 握手 accept key、短/126/127 长度帧、掩码解码、分片、ping/pong、close |
-| `pairing.test.js` | 正确/错误配对码、限速、token 持久化、错误 Origin 无 CORS |
-| `bridge.test.js` | `/hello`、`/health`、错误 token 的 WS upgrade、客户端注册 |
+| `bridge.test.js` | `/hello` 自动 token 下发、`/health`、网页 Origin 403、错误 token、配对/限速/`autoPair:false`、客户端注册 |
 | `tools.test.js` | 工具参数校验、无客户端时的错误提示、截图落盘、console/network 格式化 |
 | `state.test.js` | console 环形缓冲、network request/response/body 合并、截断 |
-| `extension-static.test.js` | manifest JSON 合法、所有 JS `node --check`、协议版本一致 |
+| `extension-static.test.js` | manifest JSON 合法、所有 JS `node --check`、协议版本一致、自动配对头 |
 
 ## 2. 桥 + 假扩展集成
 
@@ -34,11 +33,12 @@ node --test packages/dsh-browser-bridge/test/*.test.js
 
 ## 3. 真浏览器手工验收
 
-前置：DSH 已加载插件，扩展已配对。
+前置：DSH 已加载插件，扩展已连接（正常会自动连接）。
 
 | # | 操作 | 预期 |
 |---|---|---|
-| 1 | `browser_status` | `connected: true`，显示 browser/brand/version |
+| 1 | `browser_status` | `connected: true`，显示 browser/brand/version、`Auto-pair: enabled` |
+| 1b | 删除扩展 token 后重载扩展 | 无需输入配对码，自动领取 token 并连接 |
 | 2 | 打开两个窗口各一个标签，`browser_tabs` | 列出两个，active 标记正确 |
 | 3 | `browser_tabs {action:"activate"}` | 浏览器切到对应标签 |
 | 4 | 打开一个 React 表单页，`browser_snapshot` | 输入框/按钮有 `ref` 和可读 name |
@@ -52,7 +52,7 @@ node --test packages/dsh-browser-bridge/test/*.test.js
 | 12 | `browser_wait {for:"selector", value:".loaded"}` | 元素出现后返回 |
 | 13 | `browser_screenshot` | 返回 PNG 路径；`read_image` 能看到画面 |
 | 14 | 关掉 DSH 再启动 | 扩展自动重连，无需重新配对 |
-| 15 | 在扩展 Options 里 Forget token | 工具返回 `NO_CLIENT` 和配对提示 |
+| 15 | 在扩展 Options 里 Forget token | 扩展自动重新发现并连接；若失败，工具返回 `NO_CLIENT` 和后备配对提示 |
 
 ## 4. 边界场景
 
@@ -62,12 +62,12 @@ node --test packages/dsh-browser-bridge/test/*.test.js
 - **DevTools 打开**：console/network 采集仍然工作（collector 与 DevTools 不互斥）。
 - **CSP 页面**：`browser_eval` 报 `CSP_BLOCKED`；DOM 工具正常。
 - **大响应体**：返回 2MB JSON，`browser_network` 的 body 被截断并标记 `truncated`。
-- **多个 DSH profile**：第二个 profile 不会抢走已配对扩展，除非 Forget token 重配。
+- **多个 DSH profile**：扩展通常连最先扫描到的 bridge；切换时在 Options 重置连接或指定端口。
 - **中文/emoji**：console 参数、输入文本不乱码。
 
 ## 5. 兼容性矩阵
 
-| 浏览器 | 加载 | 配对 | DOM | console/network | 截图 |
+| 浏览器 | 加载 | 自动连接 | DOM | console/network | 截图 |
 |---|---|---|---|---|---|
 | Chrome 146 (macOS) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Edge 157 (macOS) | ✅ | ✅ | ✅ | ✅ | ✅ |

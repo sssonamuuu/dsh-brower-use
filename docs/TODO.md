@@ -25,8 +25,8 @@ kind: "project-todo"
 
 - [x] `ws.js` 零依赖 WebSocket 服务端（握手、掩码、分片、64 位长度、ping/pong/close）
 - [x] `bridge-server.js`：`/hello`、`/pair`、`/health`、`/ws`
-- [x] token 持久化 + 配对码轮换 + 配对限速
-- [x] 客户端注册、hello 校验、心跳超时
+- [x] token 持久化 + 自动配对（扩展 Origin 领 token）+ 配对码后备 + 限速
+- [x] 客户端注册、hello 校验、心跳超时、WS Origin 检查
 - [x] 命令发送：id、超时、断线 reject、AbortSignal
 - [x] 插件入口 `index.js`：cordis `apply`、`ctx.effect` 生命周期、systemPrompt 指引
 - [x] 工具注册：status / tabs / snapshot / read / click / type / eval / screenshot
@@ -37,11 +37,11 @@ kind: "project-todo"
 - [x] `manifest.json`（Chrome/Edge 共用）
 - [x] `content/collector.js` 骨架与注入哨兵
 - [x] `content/relay.js` postMessage 转 runtime
-- [x] `background.js`：端口扫描、`/hello` 发现、`/pair`、WS、重连退避、心跳
+- [x] `background.js`：端口扫描、`/hello` 自动领 token、`/pair` 后备、WS、重连退避、心跳
 - [x] 命令路由：tabs.* / page.*
 - [x] `scripting.executeScript` ISOLATED / MAIN 封装
 - [x] tab 解析与受限页面错误
-- [x] popup 状态 + 配对
+- [x] popup 状态 + 自动连接/后备配对
 - [x] options token/端口/测试/忘记
 - [x] 图标
 
@@ -68,11 +68,14 @@ kind: "project-todo"
 - [x] 插件 apply 生命周期测试
 - [x] 工具 schema 子集校验
 - [x] 扩展静态检查（manifest、node --check、协议版本）
-- [x] 真实 Chrome 端到端（临时 profile，37 tests + 手工工具矩阵）
+- [x] 真实 Chrome 端到端（临时 profile，40 tests + 手工工具矩阵）
 - [x] Edge 冒烟（Edge 157，同一份扩展目录）
+- [x] 自动配对实测（隔离 47830 桥，扩展无 token 启动 → 自动领取 64 hex token → 连接）
+- [x] 网页 Origin 拒绝（WS upgrade 403）
 - [x] MV3 service worker reload 后自动重连
 - [x] CSP 页面 `CSP_BLOCKED` 实测（DOM 工具正常）
-- [ ] 用户日常 profile（已登录页面）实测
+- [x] Edge 日常 profile 已连接当前桥（`browser_status` 显示 Edge 157）
+- [ ] Chrome 日常 profile（已登录页面）实测
 - [ ] MV3 service worker 自然回收（>1 分钟）后唤醒
 - [ ] React/Vue 受控输入真实表单
 
@@ -81,7 +84,7 @@ kind: "project-todo"
 - [x] 插件 bundle 可被 DSH profile 安装（link）
 - [x] HMR 下启用并确认 `fiberPhase: active`
 - [x] 临时 Chrome 加载扩展
-- [x] 配对成功、13 个工具端到端
+- [x] 自动连接成功、13 个工具端到端
 - [x] 文档补充实测结果
 
 ## 已知缺口（v0.1 接受）

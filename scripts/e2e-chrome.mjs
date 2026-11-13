@@ -17,17 +17,18 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const extensionPath = path.resolve(__dirname, '../extension')
+const extensionPath = process.env.E2E_EXTENSION_PATH || path.resolve(__dirname, '../extension')
 const chromePath = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const profileDir = process.env.CHROME_PROFILE || '/tmp/dsh-chrome-verify'
 const bridgePort = Number(process.env.DSH_BRIDGE_PORT || 47821)
 const fixturePort = Number(process.env.FIXTURE_PORT || 8099)
-const stateFile = path.join(process.env.DSH_HOME || path.join(homedir(), '.dsh'), 'browser-bridge', 'state.json')
+const stateFile = process.env.E2E_BRIDGE_STATE || path.join(process.env.DSH_HOME || path.join(homedir(), '.dsh'), 'browser-bridge', 'state.json')
 
 const state = JSON.parse(await readFile(stateFile, 'utf8'))
 const token = state.token
 if (!token) throw new Error(`no bridge token in ${stateFile}`)
 const pairMode = process.argv.includes('--pair') || process.env.E2E_PAIR === '1'
+const autoMode = process.argv.includes('--auto') || process.env.E2E_AUTO === '1'
 const pairCode = process.env.E2E_PAIR_CODE || state.pairCode
 
 const chrome = spawn(chromePath, [
@@ -147,7 +148,9 @@ try {
   const targets = await call('Target.getTargets')
   const worker = targets.targetInfos.find((target) => target.type === 'service_worker' && target.url.includes(`${extensionId}/background.js`))
   if (!worker) throw new Error('extension service worker target not found')
-  if (pairMode) {
+  if (autoMode) {
+    console.log('[e2e] auto-pair mode: waiting for the extension to discover the bridge and fetch a token…')
+  } else if (pairMode) {
     // Exercise the real pairing path: extension page -> fetch /pair -> WS connect.
     const options = await call('Target.createTarget', { url: `chrome-extension://${extensionId}/options.html` })
     await sleep(600)
@@ -168,6 +171,16 @@ try {
 
   const health = await waitForBridge(1)
   console.log(`[e2e] extension connected: ${JSON.stringify(health.active)}`)
+  if (autoMode) {
+    const currentTargets = (await call('Target.getTargets')).targetInfos
+    const currentWorker = currentTargets.find((target) => target.type === 'service_worker' && target.url.includes(`${extensionId}/background.js`))
+    if (currentWorker) {
+      const autoSession = await attach(currentWorker.targetId)
+      await call('Runtime.enable', {}, autoSession)
+      const stored = await evaluate(autoSession, 'chrome.storage.local.get("dshBridge.token").then(v => v["dshBridge.token"] || "")')
+      console.log(`[e2e] auto token stored: ${typeof stored === 'string' && stored.length === 64 ? 'yes (64 hex)' : 'NO'}`)
+    }
+  }
 
   const page = await call('Target.createTarget', { url: `http://127.0.0.1:${fixturePort}/` })
   console.log(`[e2e] fixture page target: ${page.targetId}`)

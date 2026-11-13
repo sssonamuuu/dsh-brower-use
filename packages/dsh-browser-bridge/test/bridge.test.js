@@ -153,3 +153,64 @@ test('stop closes upgraded sockets even when hello never arrives', async (t) => 
   assert.ok(Date.now() - started < 3000, 'bridge.stop() must not wait for an untracked upgraded socket')
   try { ws.close() } catch { /* ignore */ }
 })
+
+test('/hello hands the token only to extension clients', async (t) => {
+  const { bridge, cleanup } = await makeBridge()
+  t.after(cleanup)
+
+  const plain = await (await fetch(`${bridge.url}/hello`)).json()
+  assert.equal(plain.token, undefined)
+  assert.equal(plain.autoPair, true)
+
+  const web = await (await fetch(`${bridge.url}/hello`, { headers: { origin: 'https://evil.example' } })).json()
+  assert.equal(web.token, undefined)
+
+  const extension = await (await fetch(`${bridge.url}/hello`, {
+    headers: { origin: 'chrome-extension://abcdefghijklmnop' },
+  })).json()
+  assert.match(extension.token, /^[a-f0-9]{64}$/)
+  assert.equal(extension.token, bridge.token)
+
+  const localClient = await (await fetch(`${bridge.url}/hello`, {
+    headers: { 'x-dsh-bridge-client': 'auto' },
+  })).json()
+  assert.equal(localClient.token, bridge.token)
+})
+
+test('auto-pair can be disabled for locked-down deployments', async (t) => {
+  const { bridge, cleanup } = await makeBridge({ autoPair: false })
+  t.after(cleanup)
+  const hello = await (await fetch(`${bridge.url}/hello`, {
+    headers: { origin: 'chrome-extension://abcdefghijklmnop', 'x-dsh-bridge-client': 'auto' },
+  })).json()
+  assert.equal(hello.autoPair, false)
+  assert.equal(hello.token, undefined)
+})
+
+test('WebSocket upgrade rejects a web page Origin even with a valid token', async (t) => {
+  const { bridge, cleanup } = await makeBridge()
+  t.after(cleanup)
+  const net = await import('node:net')
+  const response = await new Promise((resolve, reject) => {
+    const socket = net.connect(bridge.port, '127.0.0.1', () => {
+      socket.write([
+        'GET /ws?token=' + bridge.token + ' HTTP/1.1',
+        `Host: 127.0.0.1:${bridge.port}`,
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+        'Sec-WebSocket-Version: 13',
+        'Origin: https://evil.example',
+        '',
+        '',
+      ].join('\r\n'))
+    })
+    let data = ''
+    socket.on('data', (chunk) => { data += chunk.toString('utf8') })
+    socket.on('end', () => resolve(data))
+    socket.on('close', () => resolve(data))
+    socket.on('error', reject)
+    setTimeout(() => { socket.destroy(); resolve(data) }, 2000)
+  })
+  assert.match(response, /HTTP\/1\.1 403/)
+})

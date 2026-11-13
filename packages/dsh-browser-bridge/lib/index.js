@@ -85,6 +85,7 @@ function normalizeConfig(raw) {
     pairMaxFailures: toInt(config.pairMaxFailures, 5),
     ...(typeof config.stateDir === 'string' && config.stateDir ? { stateDir: config.stateDir } : {}),
     ...(config.pairingEnabled === false ? { pairingEnabled: false } : {}),
+    ...(config.autoPair === false ? { autoPair: false } : {}),
     ...(config.allowRepair === true ? { allowRepair: true } : {}),
   }
 }

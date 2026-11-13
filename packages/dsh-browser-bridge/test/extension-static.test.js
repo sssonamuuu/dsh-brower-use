@@ -68,6 +68,8 @@ test('background imports the injected page scripts', async () => {
   assert.match(background, /pageEval/)
   assert.match(background, /chrome\.scripting\.executeScript/)
   assert.match(background, /captureVisibleTab/)
+  assert.match(background, /x-dsh-bridge-client/)
+  assert.match(background, /auto-pair|autoPair|AUTO_PAIR_HEADER/i)
 })
 
 test('collector hooks console, fetch, XHR and errors', async () => {

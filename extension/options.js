@@ -119,9 +119,9 @@ $('pairCode').addEventListener('keydown', (event) => {
 })
 $('saveBtn').addEventListener('click', save)
 $('forgetBtn').addEventListener('click', async () => {
-  if (!confirm('确定忘记 token？下次需要重新配对。')) return
+  if (!confirm('清除本地 token 并重新自动发现 DSH？')) return
   await request('dsh/forget')
-  $('saveHint').textContent = '已忘记 token。'
+  $('saveHint').textContent = '已清除 token，正在自动重新发现 DSH。'
   $('saveHint').className = 'hint'
   await refresh()
 })

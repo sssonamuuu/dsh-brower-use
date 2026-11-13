@@ -25,11 +25,11 @@ function execute(definitions, name, args = {}) {
   return definition.execute(args, { signal: new AbortController().signal, agent: null })
 }
 
-test('browser_status reports pairing code and connection state', async (t) => {
+test('browser_status reports auto-pair and connection state', async (t) => {
   const { bridge, definitions } = await makeToolkit(t)
   const text = await execute(definitions, 'browser_status')
   assert.match(text, /DSH Browser Bridge v0\.1\.0/)
-  assert.match(text, new RegExp(bridge.pairingCode))
+  assert.match(text, /Auto-pair: enabled/)
   assert.match(text, /Extension: connected/)
   assert.match(text, /TestChrome 999\.0\.0\.0/)
 })

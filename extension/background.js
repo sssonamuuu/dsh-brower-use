@@ -19,6 +19,7 @@ const BADGE_ON = '#16a34a'
 const BADGE_OFF = '#dc2626'
 const BADGE_PAIR = '#d97706'
 const BADGE_ERR = '#7c3aed'
+const AUTO_PAIR_HEADER = 'x-dsh-bridge-client'
 
 let settings = { token: '', port: null, autoConnect: true }
 let initPromise = null
@@ -37,6 +38,7 @@ let cancelled = new Set()
 let seqByTab = new Map()
 let collectorsRunning = false
 let intentionalClose = false
+let connectionFailures = 0
 const RELAY_EVENTS = new Set(['console', 'network.request', 'network.response', 'network.body', 'network.error', 'page.lifecycle'])
 
 let status = {
@@ -54,12 +56,10 @@ async function init(force = false) {
   initPromise = (async () => {
     await loadSettings()
     await ensureAlarm()
-    updateBadge(settings.token ? '…' : 'PAIR', settings.token ? BADGE_OFF : BADGE_PAIR, 'DSH Browser Bridge')
-    if (settings.token) {
-      connect().catch((error) => setError(error))
-    } else {
-      setStatus('pairing_required')
-    }
+    updateBadge('…', BADGE_PAIR, 'DSH Browser Bridge')
+    // With auto-pair the extension never needs the user to type a code: it
+    // discovers the bridge and receives a token over the CORS-gated handshake.
+    connect().catch((error) => setError(error))
   })()
   return initPromise
 }
@@ -150,6 +150,7 @@ async function scanPorts() {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/hello`, {
         cache: 'no-store',
+        headers: { [AUTO_PAIR_HEADER]: 'auto' },
         signal: AbortSignal.timeout(900),
       })
       if (!response.ok) return
@@ -216,33 +217,52 @@ async function forget() {
   socket = null
   connected = false
   helloOk = false
+  connectionFailures = 0
   stopHeartbeat()
   clearTimeout(reconnectTimer)
   await chrome.storage.local.remove([STORAGE.token, STORAGE.port, STORAGE.serverVersion, STORAGE.lastError]).catch(() => {})
   settings.token = ''
   settings.port = null
-  updateBadge('PAIR', BADGE_PAIR, 'DSH Browser Bridge — not paired')
+  updateBadge('…', BADGE_PAIR, 'DSH Browser Bridge — rediscovering')
   setStatus('pairing_required')
+  // With auto-pair the token is disposable: rediscover immediately instead of
+  // making the user wait for the keepalive alarm.
+  setTimeout(() => { connect().catch(() => {}) }, 150)
   return { ok: true }
 }
 
 async function connect() {
   if (connecting || (socket && socket.readyState === WebSocket.OPEN)) return
-  if (!settings.token) {
-    updateBadge('PAIR', BADGE_PAIR)
-    setStatus('pairing_required')
-    return
-  }
   clearTimeout(reconnectTimer)
   connecting = true
   setStatus('connecting')
   try {
     const candidates = await scanPorts()
     if (candidates.length === 0) {
+      if (!settings.token) {
+        updateBadge('PAIR', BADGE_PAIR, 'DSH Browser Bridge — waiting for DSH')
+        setStatus('pairing_required', { lastError: '没有找到 DSH bridge（127.0.0.1:47821-47830）' })
+      }
       throw new Error('本地 DSH bridge 未找到（47821-47830）')
     }
-    const target = candidates.find((item) => item.port === settings.port) ?? candidates[0]
+    let target = candidates.find((item) => item.port === settings.port) ?? candidates[0]
+    if (!settings.token) {
+      const auto = target.hello?.token ? target : (candidates.find((item) => item.hello?.token) ?? target)
+      if (!auto.hello?.token) {
+        updateBadge('PAIR', BADGE_PAIR, 'DSH Browser Bridge — manual pairing required')
+        setStatus('pairing_required', { lastError: 'bridge 未开启自动配对，请在扩展设置里输入配对码' })
+        throw new Error('bridge 未开启自动配对；请在扩展设置里输入 browser_status 显示的配对码')
+      }
+      target = auto
+      await saveSettings({
+        [STORAGE.token]: auto.hello.token,
+        [STORAGE.port]: auto.port,
+        [STORAGE.serverVersion]: auto.hello.version ?? null,
+        [STORAGE.lastError]: null,
+      })
+    }
     settings.port = target.port
+    await chrome.storage.local.set({ [STORAGE.port]: target.port }).catch(() => {})
     await new Promise((resolve, reject) => {
       let ws
       try {
@@ -291,12 +311,19 @@ async function connect() {
         connected = false
         helloOk = false
         stopHeartbeat()
+        connectionFailures += 1
+        if (connectionFailures >= 3 && settings.token) {
+          // The bridge may have rotated its state file (or restarted on another
+          // port). Drop the stale token and let the next attempt auto-discover.
+          settings.token = ''
+          chrome.storage.local.remove([STORAGE.token]).catch(() => {})
+        }
         updateBadge(settings.token ? 'OFF' : 'PAIR', settings.token ? BADGE_OFF : BADGE_PAIR)
         if (!settled) {
           settled = true
           reject(new Error(event.reason || `WebSocket closed (${event.code})`))
         }
-        if (!intentionalClose && settings.token && settings.autoConnect) {
+        if (!intentionalClose && settings.autoConnect) {
           setStatus('disconnected', { lastError: event.reason || `closed (${event.code})` })
           scheduleReconnect()
         } else {
@@ -305,8 +332,13 @@ async function connect() {
       }
     })
   } catch (error) {
-    setError(error)
-    if (settings.token && settings.autoConnect) scheduleReconnect()
+    if (!settings.token) {
+      updateBadge('PAIR', BADGE_PAIR, 'DSH Browser Bridge — waiting for DSH')
+      setStatus('pairing_required', { lastError: error instanceof Error ? error.message : String(error) })
+    } else {
+      setError(error)
+    }
+    if (settings.autoConnect) scheduleReconnect()
   } finally {
     connecting = false
   }
@@ -333,6 +365,7 @@ function handleSocketMessage(message) {
   if (message.type === 'hello_ok') {
     connected = true
     helloOk = true
+    connectionFailures = 0
     helloInfo = message
     clearTimeout(helloTimer)
     reconnectDelay = 1000
