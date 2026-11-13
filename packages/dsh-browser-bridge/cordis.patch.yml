@@ -1,0 +1,13 @@
+# DSH Browser Bridge bundle layer.
+#
+# The bridge binds loopback only. Change `port` if 47821 is taken; the
+# extension scans port..port+portRange-1 for GET /hello.
+- insert:
+    - id: browser-bridge
+      name: dsh-browser-bridge
+      config:
+        port: 47821
+        portRange: 10
+        # stateDir: ~/.dsh/browser-bridge
+        # pairingEnabled: true
+        # allowRepair: false

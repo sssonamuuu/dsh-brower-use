@@ -1,0 +1,34 @@
+{
+  "name": "dsh-browser-bridge",
+  "version": "0.1.0",
+  "description": "DSH host plugin: inspect and debug the user's real Chrome/Edge tabs through a local browser extension bridge",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "dsh-bundle",
+    "browser",
+    "chrome",
+    "edge",
+    "devtools"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "dsh-browser-bridge-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH Browser Bridge: host plugin + Chrome/Edge MV3 extension",
+  "type": "module",
+  "scripts": {
+    "test": "node --test packages/dsh-browser-bridge/test/*.test.js",
+    "check": "node --check packages/dsh-browser-bridge/lib/index.js && node --check extension/background.js",
+    "dev:bridge": "node scripts/dev-bridge.mjs"
+  },
+  "license": "MIT"
+}

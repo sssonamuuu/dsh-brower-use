@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Browser Bridge</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+  <header class="app">
+    <img src="icons/icon48.png" alt="">
+    <div class="titles">
+      <h1>DSH Browser Bridge</h1>
+      <div class="sub" id="sub">正在读取状态…</div>
+    </div>
+    <span class="dot" id="dot"></span>
+  </header>
+
+  <section>
+    <div class="row between">
+      <span class="pill" id="statePill">initializing</span>
+      <span class="small muted mono" id="portLabel"></span>
+    </div>
+    <div class="hint" id="statusHint"></div>
+    <div class="error" id="error" hidden></div>
+  </section>
+
+  <section id="activeSection" hidden>
+    <h2>当前标签页</h2>
+    <div class="mono small" id="activeTitle"></div>
+    <div class="muted small" id="activeUrl" style="word-break:break-all"></div>
+  </section>
+
+  <section id="pairSection" hidden>
+    <h2>配对</h2>
+    <div class="pair-code">
+      <input id="pairCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" aria-label="6 位配对码">
+      <button class="primary" id="pairBtn">Pair</button>
+    </div>
+    <div class="hint">在 DSH 里调用 <code>browser_status</code> 获取 6 位配对码。</div>
+  </section>
+
+  <section>
+    <div class="actions">
+      <button id="reconnectBtn">重连</button>
+      <button id="optionsBtn">设置</button>
+      <button id="testBtn">检测端口</button>
+    </div>
+    <pre class="log" id="testLog" hidden></pre>
+  </section>
+
+  <footer class="foot">
+    <span id="versionLabel">v0.1.0</span>
+    <a href="#" id="helpLink">安装/排障</a>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
