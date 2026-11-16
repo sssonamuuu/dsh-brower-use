@@ -115,25 +115,41 @@ export async function apply(ctx, rawConfig = {}) {
     webCtx.effect(() => webCtx.webServer.register({
       kind: 'exact',
       path: '/api/browser-bridge/arm',
-      resource: async (request) => {
-        const origin = request.headers.get('origin')
-        const host = request.headers.get('host')
+      // The webserver only dispatches GET/HEAD to `resource`; this route has a
+      // side effect and uses a POST body, so it must own the raw handler.
+      handler: async (req, res) => {
+        const origin = req.headers.origin
+        const host = req.headers.host
         const sameOrigin = origin === `http://${host}` || origin === `https://${host}`
         if (origin && !sameOrigin && origin !== 'null') {
-          return jsonResponse({ ok: false, error: 'forbidden' }, 403)
+          writeJson(res, 403, { ok: false, error: 'forbidden' })
+          return
         }
-        if (request.method !== 'POST') {
-          return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405, { allow: 'POST' })
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, error: 'method_not_allowed' }, { allow: 'POST' })
+          return
+        }
+        let body = ''
+        try {
+          for await (const chunk of req) {
+            body += chunk
+            if (body.length > 8 * 1024) throw new Error('too large')
+          }
+        } catch {
+          writeJson(res, 413, { ok: false, error: 'payload_too_large' })
+          return
         }
         let payload
         try {
-          payload = await request.json()
+          payload = JSON.parse(body || '{}')
         } catch {
-          return jsonResponse({ ok: false, error: 'bad_request' }, 400)
+          writeJson(res, 400, { ok: false, error: 'bad_request' })
+          return
         }
         const tabId = Number(payload?.tabId)
         if (!Number.isFinite(tabId)) {
-          return jsonResponse({ ok: false, error: 'bad_request', message: 'tabId is required' }, 400)
+          writeJson(res, 400, { ok: false, error: 'bad_request', message: 'tabId is required' })
+          return
         }
         try {
           const data = await bridge.command('collector.ensure', { tabId }, {
@@ -141,13 +157,13 @@ export async function apply(ctx, rawConfig = {}) {
             timeoutMs: 5000,
             requiredCaps: ['dom'],
           })
-          return jsonResponse({ ok: true, ...data }, 200)
+          writeJson(res, 200, { ok: true, ...data })
         } catch (error) {
-          return jsonResponse({
+          writeJson(res, error?.code === 'NO_CLIENT' ? 503 : 400, {
             ok: false,
             error: error?.code ?? 'ARM_FAILED',
             message: error instanceof Error ? error.message : String(error),
-          }, error?.code === 'NO_CLIENT' ? 503 : 400)
+          })
         }
       },
     }), 'browser-bridge: arm route')
@@ -199,6 +215,18 @@ function jsonResponse(value, status = 200, extra = {}) {
       ...extra,
     },
   })
+}
+
+function writeJson(res, status, value, extra = {}) {
+  const body = JSON.stringify(value)
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'content-length': Buffer.byteLength(body),
+    ...extra,
+  })
+  res.end(body)
 }
 
 export { BridgeServer, SYSTEM_PROMPT }
