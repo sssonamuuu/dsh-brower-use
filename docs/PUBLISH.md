@@ -155,13 +155,13 @@ npm publish --access public
 DSH → **Plugins → Add plugin**：
 
 ```text
-@sssonamuuu/dsh-browser-bridge@0.1.1
+@sssonamuuu/dsh-browser-bridge@0.1.2
 ```
 
 或在 Agent 中使用：
 
 ```text
-plugin_manager install_bundle target=@sssonamuuu/dsh-browser-bridge@0.1.1
+plugin_manager install_bundle target=@sssonamuuu/dsh-browser-bridge@0.1.2
 ```
 
 也可以直接从 Git 安装（适合未发 npm 的预发布）：
@@ -215,7 +215,7 @@ DSH 默认没有第三方插件索引。要出现在 Discover：
       },
       "versions": [
         {
-          "version": "0.1.1",
+          "version": "0.1.2",
           "publishTimestamp": 1760000000,
           "source": { "type": "npm" },
           "engines": { "dsh": ">=0.2.2-rc.1" }
@@ -233,14 +233,14 @@ DSH 默认没有第三方插件索引。要出现在 Discover：
 发布 tag 和附件也能作为团队分发渠道：
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 在 GitHub Release 上传：
 
-- `dist/dsh-browser-bridge-0.1.1-chromium.zip`
-- `npm pack` 得到的 `sssonamuuu-dsh-browser-bridge-0.1.1.tgz`
+- `dist/dsh-browser-bridge-0.1.2-chromium.zip`
+- `npm pack` 得到的 `sssonamuuu-dsh-browser-bridge-0.1.2.tgz`
 
 ## 四、常见失败
 
