@@ -98,13 +98,11 @@ export async function apply(ctx, rawConfig = {}) {
           return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405, { allow: 'GET, HEAD' })
         }
         try {
-          const data = await bridge.command('tabs.list', {}, { timeoutMs: 5000 })
-          const client = bridge.status().clients[0] ?? null
-          const browser = client
-            ? { brand: client.brand, engine: client.browser, version: client.browserVersion }
+          const data = await bridge.listTabs({ timeoutMs: 5000 })
+          const browser = data.clients.length === 1
+            ? { brand: data.clients[0].brand, engine: data.clients[0].browser, version: data.clients[0].browserVersion }
             : null
-          const tabs = (data.tabs ?? []).map((tab) => ({ ...tab, browser: browser?.brand ?? '' }))
-          return jsonResponse({ ok: true, browser, tabs }, 200)
+          return jsonResponse({ ok: true, browser, browsers: data.clients, tabs: data.tabs, errors: data.errors }, 200)
         } catch (error) {
           const code = error?.code ?? 'NO_CLIENT'
           return jsonResponse(

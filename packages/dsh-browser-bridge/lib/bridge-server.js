@@ -46,6 +46,8 @@ export class BridgeServer extends EventEmitter {
   #clients = new Set()
   #sockets = new Set()
   #active = null
+  /** tab id -> owning browser client; lets page commands follow the right browser. */
+  #tabOwners = new Map()
   #pending = new Map()
   #nextCommandId = 1
   #heartbeatTimer = null
@@ -182,6 +184,7 @@ export class BridgeServer extends EventEmitter {
     for (const client of [...this.#clients]) client.conn.close(1001, 'host shutting down')
     this.#clients.clear()
     this.#active = null
+    this.#tabOwners.clear()
     this.#rejectAll(new BridgeError(ERROR.CLIENT_CLOSED, 'browser bridge stopped'))
     const server = this.#server
     this.#server = null
@@ -201,14 +204,114 @@ export class BridgeServer extends EventEmitter {
   }
 
   /**
+   * Pick the client a command should go to. Explicit `clientId` wins; a tab id
+   * follows the browser that reported that tab; otherwise use the most recent
+   * connection. This is what lets Edge and Chrome stay connected together.
+   * @param {{ clientId?: string, tabId?: number, browser?: string }} [options]
+   * @returns {object|null}
+   */
+  #resolveClient(options = {}) {
+    if (options.clientId != null) {
+      for (const client of this.#clients) {
+        if (client.id === options.clientId && client.conn.open) return client
+      }
+      return null
+    }
+    if (Number.isFinite(Number(options.tabId))) {
+      const owner = this.#tabOwners.get(Number(options.tabId))
+      if (owner && this.#clients.has(owner) && owner.conn.open) return owner
+    }
+    if (options.browser) {
+      const wanted = String(options.browser).toLowerCase()
+      const match = [...this.#clients].find((client) => client.conn.open && (`${client.info.brand ?? ''} ${client.info.browser ?? ''}`).toLowerCase().includes(wanted))
+      if (match) return match
+    }
+    return this.#active && this.#active.conn.open ? this.#active : this.#clients.values().next().value ?? null
+  }
+
+  /** Record every tab returned by one client so later page commands can route by tab id. */
+  #rememberTabList(client, tabs) {
+    if (!Array.isArray(tabs)) return
+    for (const tab of tabs) {
+      if (tab?.id != null) this.#tabOwners.set(Number(tab.id), client)
+    }
+  }
+
+  /** Record one tab result (open/activate) against its client. */
+  #rememberTab(client, tab) {
+    if (tab?.id != null) this.#tabOwners.set(Number(tab.id), client)
+  }
+
+  /**
+   * Ask every connected browser for its tabs and merge the results.
+   * One browser failing does not hide the others' tabs.
+   * @param {{ timeoutMs?: number, signal?: AbortSignal }} [options]
+   * @returns {Promise<{tabs: object[], clients: object[], errors: object[]}>}
+   */
+  async listTabs(options = {}) {
+    const wanted = options.browser ? String(options.browser).toLowerCase() : ''
+    const clients = [...this.#clients].filter((client) => client.conn.open
+      && (!wanted || `${client.info.brand ?? ''} ${client.info.browser ?? ''}`.toLowerCase().includes(wanted)))
+    if (clients.length === 0) {
+      throw new BridgeError(
+        ERROR.NO_CLIENT,
+        `browser extension is not connected. Open the DSH Browser Bridge extension, click Pair, and enter code ${this.#auth.pairCode}.`,
+        { pairingCode: this.#auth.pairCode, port: this.#port },
+      )
+    }
+    const settled = await Promise.allSettled(
+      clients.map((client) => this.command('tabs.list', {}, {
+        ...options,
+        clientId: client.id,
+        requiredCaps: ['tabs'],
+      })),
+    )
+    const tabs = []
+    const errors = []
+    settled.forEach((result, index) => {
+      const client = clients[index]
+      if (result.status === 'fulfilled') {
+        const list = result.value?.tabs ?? []
+        this.#rememberTabList(client, list)
+        for (const tab of list) {
+          tabs.push({
+            ...tab,
+            browser: client.info.brand ?? client.info.browser ?? 'Browser',
+            browserEngine: client.info.browser,
+            browserVersion: client.info.browserVersion,
+            clientId: client.id,
+          })
+        }
+      } else {
+        errors.push({
+          clientId: client.id,
+          browser: client.info.brand ?? client.info.browser ?? 'Browser',
+          code: result.reason?.code ?? 'ERROR',
+          message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        })
+      }
+    })
+    return {
+      tabs,
+      clients: clients.map((client) => ({
+        id: client.id,
+        browser: client.info.browser,
+        brand: client.info.brand,
+        browserVersion: client.info.browserVersion,
+      })),
+      errors,
+    }
+  }
+
+  /**
    * Send a command to the connected extension.
    * @param {string} action
    * @param {object} [params]
-   * @param {{ tabId?: number, frameId?: number, timeoutMs?: number, signal?: AbortSignal, requiredCaps?: string[] }} [options]
+   * @param {{ tabId?: number, frameId?: number, timeoutMs?: number, signal?: AbortSignal, requiredCaps?: string[], clientId?: string }} [options]
    */
   async command(action, params = {}, options = {}) {
     if (this.#stopped) throw new BridgeError(ERROR.NO_BRIDGE, 'browser bridge is stopped')
-    const client = this.#active
+    const client = this.#resolveClient(options)
     if (!client || !client.conn.open) {
       throw new BridgeError(
         ERROR.NO_CLIENT,
@@ -283,7 +386,7 @@ export class BridgeServer extends EventEmitter {
       port: this.#port,
       protocol: PROTOCOL_VERSION,
       version: PACKAGE_VERSION,
-      paired: this.#active != null,
+      paired: this.#clients.size > 0,
       autoPair: this.#config.autoPair !== false,
       tokenHandoff: 'extension-origin-or-explicit-client-header',
       pairingCode: this.#auth.pairCode,
@@ -340,7 +443,7 @@ export class BridgeServer extends EventEmitter {
         version: PACKAGE_VERSION,
         port: this.#port,
         autoPair: this.#config.autoPair !== false,
-        pairing: this.#config.pairingEnabled !== false && this.#active == null,
+        pairing: this.#config.pairingEnabled !== false && this.#clients.size === 0,
         // The token is only handed to extension origins or clients that prove
         // they are not a cross-origin web page (custom header + CORS gate).
         ...(autoToken ? { token: this.#auth.token } : {}),
@@ -359,6 +462,12 @@ export class BridgeServer extends EventEmitter {
               version: this.#active.info.browserVersion,
             }
           : null,
+        browsers: [...this.#clients].map((client) => ({
+          id: client.id,
+          browser: client.info.browser,
+          brand: client.info.brand,
+          version: client.info.browserVersion,
+        })),
         stats: this.#store.stats(),
       }, security)
       return
@@ -375,7 +484,7 @@ export class BridgeServer extends EventEmitter {
       respondJson(res, 403, { ok: false, error: 'pairing_disabled' }, headers)
       return
     }
-    if (this.#active != null && this.#config.allowRepair !== true) {
+    if (this.#clients.size > 0 && this.#config.allowRepair !== true) {
       respondJson(res, 403, { ok: false, error: 'pairing_disabled', reason: 'already_connected' }, headers)
       return
     }
@@ -516,9 +625,13 @@ export class BridgeServer extends EventEmitter {
       client.info = info
       client.helloSent = true
       clearTimeout(client.helloTimer)
-      // Replace an existing connection: reloading the extension leaves stale sockets.
+      // Only replace a stale socket from the same browser. Different browsers
+      // (e.g. Edge and Chrome) must remain connected simultaneously.
+      const clientKey = `${info.browser ?? ''}|${info.brand ?? ''}`
       for (const other of this.#clients) {
-        if (other !== client) other.conn.close(4000, 'replaced by a new connection')
+        if (other !== client && `${other.info.browser ?? ''}|${other.info.brand ?? ''}` === clientKey) {
+          other.conn.close(4000, 'replaced by a new connection from the same browser')
+        }
       }
       this.#clients.add(client)
       this.#active = client
@@ -547,7 +660,10 @@ export class BridgeServer extends EventEmitter {
       this.#pending.delete(String(msg.id))
       pending.cleanup()
       if (msg.ok) {
-        pending.resolve(msg.data ?? {})
+        const data = msg.data ?? {}
+        if (pending.action === 'tabs.list') this.#rememberTabList(client, data.tabs)
+        else if (pending.action === 'tabs.open' || pending.action === 'tabs.activate') this.#rememberTab(client, data.tab)
+        pending.resolve(data)
       } else {
         const error = msg.error && typeof msg.error === 'object' ? msg.error : {}
         pending.reject(new BridgeError(error.code ?? ERROR.INTERNAL, error.message ?? 'browser command failed', error.details))
@@ -556,6 +672,14 @@ export class BridgeServer extends EventEmitter {
     }
     if (msg.type === 'event') {
       // The extension reports the tab/frame it belongs to; seq is per-tab.
+      const eventTabId = Number(msg.tabId)
+      if (Number.isFinite(eventTabId)) {
+        if (msg.event === 'tab.removed') this.#tabOwners.delete(eventTabId)
+        else this.#tabOwners.set(eventTabId, client)
+      }
+      if (msg.event === 'tab.updated' && msg.data?.tab?.id != null) {
+        this.#tabOwners.set(Number(msg.data.tab.id), client)
+      }
       this.#store.handle(msg)
       this.emit('browser-event', msg)
       return
@@ -567,6 +691,9 @@ export class BridgeServer extends EventEmitter {
     if (!this.#clients.delete(client)) return
     if (this.#active === client) {
       this.#active = this.#clients.values().next().value ?? null
+    }
+    for (const [tabId, owner] of [...this.#tabOwners]) {
+      if (owner === client) this.#tabOwners.delete(tabId)
     }
     clearTimeout(client.helloTimer)
     for (const [id, pending] of [...this.#pending]) {

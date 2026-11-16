@@ -99,6 +99,7 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 
 - 只允许同源请求（`Origin` 为空或等于 `Host`）或 `null`（桌面壳），其他 Origin 返回 `403`。
 - 扩展未连接时返回 `503`，`error: "NO_CLIENT"`。
+- 多浏览器时每项 `tab.browser` 标明来源，`browsers` 数组列出所有已连接浏览器。
 - 只读；不会操作标签页。
 
 ### 动作 `system.ping`

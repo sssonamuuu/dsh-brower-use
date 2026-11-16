@@ -214,3 +214,42 @@ test('WebSocket upgrade rejects a web page Origin even with a valid token', asyn
   })
   assert.match(response, /HTTP\/1\.1 403/)
 })
+
+test('Edge and Chrome can stay connected together and tab commands route by owner', async (t) => {
+  const { bridge, cleanup } = await makeBridge()
+  t.after(cleanup)
+
+  const edge = await new FakeExtension(bridge, {
+    info: { brand: 'Edge', browser: 'chromium' },
+    onCommand: async (action) => {
+      if (action === 'tabs.list') return { tabs: [{ id: 101, title: 'Edge tab', url: 'http://edge/' }] }
+      if (action === 'page.read') return { text: 'from Edge' }
+      return {}
+    },
+  }).connect()
+  t.after(() => edge.close())
+
+  const chrome = await new FakeExtension(bridge, {
+    info: { brand: 'Chrome', browser: 'chromium' },
+    onCommand: async (action) => {
+      if (action === 'tabs.list') return { tabs: [{ id: 201, title: 'Chrome tab', url: 'http://chrome/' }] }
+      if (action === 'page.read') return { text: 'from Chrome' }
+      return {}
+    },
+  }).connect()
+  t.after(() => chrome.close())
+
+  assert.equal(bridge.clientCount, 2)
+  assert.equal(bridge.status().clients.length, 2)
+  assert.equal(bridge.status().paired, true)
+
+  const data = await bridge.listTabs()
+  assert.deepEqual(data.tabs.map((tab) => tab.browser).sort(), ['Chrome', 'Edge'])
+  assert.equal(data.tabs.find((tab) => tab.id === 101).browser, 'Edge')
+  assert.equal(data.tabs.find((tab) => tab.id === 201).browser, 'Chrome')
+
+  const fromChrome = await bridge.command('page.read', {}, { tabId: 201 })
+  assert.equal(fromChrome.text, 'from Chrome')
+  const fromEdge = await bridge.command('page.read', {}, { tabId: 101 })
+  assert.equal(fromEdge.text, 'from Edge')
+})

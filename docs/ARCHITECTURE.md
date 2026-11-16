@@ -145,6 +145,19 @@ Host 侧缓冲的原因：
 明确信任假设：**能读到 `state.json` 的本机进程已经拥有同等权限**。这不是防本机恶意软件的
 方案，是防网页/局域网误连的方案。
 
+## 6.1.1 多浏览器并存
+
+Host 维护 `#clients` 集合，不再用单例 `#active` 代表全部连接：
+
+- 不同浏览器的 hello **不会互相踢掉**；只有同一 `browser|brand` 的旧 socket 会被新连接替换，
+  以覆盖扩展热重载留下的僵尸连接。
+- 命令路由：显式 `clientId` → tab 归属 → 显式 `browser` → 最近连接。
+- `#tabOwners` 由 `tabs.list`/`tabs.open`/`tabs.activate` 结果和 `tab.*` 事件维护，
+  页面命令按 tabId 找到正确浏览器。
+- `bridge.listTabs()` 并行询问所有客户端并合并 tabs，每个 tab 带 `browser`/`clientId`；
+  一个浏览器失败不会隐藏另一个浏览器的 tabs。
+- `@` 路由和 `browser_tabs list` 都使用合并列表，因此 Edge + Chrome 会同时出现。
+
 ## 6.2 `@` 标签页如何工作
 
 ```

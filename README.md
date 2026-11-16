@@ -37,6 +37,7 @@
 | 看网络 | `browser_network` | 请求列表、headers、状态码、耗时、响应体（文本/JSON） |
 | 等待 | `browser_wait` | 等 selector / 文本 / console 报错 / 网络空闲 |
 | 状态 | `browser_status` | 连接状态、浏览器、自动配对状态、排查信息 |
+| 多浏览器 | 自动 | Edge、Chrome 等扩展可同时连接；`@` 按浏览器分组，工具按 tab 归属路由 |
 | `@` 提标签页 | `@` 菜单 | 在输入框输入 `@`，按浏览器分组显示带 favicon 的标签页，插入 `[Browser tab id=…]` 引用 |
 
 ## 快速开始

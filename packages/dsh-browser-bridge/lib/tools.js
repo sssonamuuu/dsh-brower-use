@@ -211,7 +211,7 @@ class ToolRuntime {
         const lines = [
           `DSH Browser Bridge v${status.version} (protocol ${status.protocol})`,
           `Bridge: ${status.listening ? `listening on http://${status.host}:${status.port}` : 'NOT listening'}${status.error ? ` — ${status.error}` : ''}`,
-          `Extension: ${status.paired ? 'connected' : 'NOT connected'}`,
+          `Extension: ${status.paired ? `connected (${status.clients.length} browser${status.clients.length === 1 ? '' : 's'})` : 'NOT connected'}`,
         ]
         for (const client of status.clients) {
           lines.push(
@@ -290,6 +290,7 @@ class ToolRuntime {
           url: str('URL to open for action=open. Must be http(s).'),
           active: bool('For open: focus the new tab (default true).'),
           bypassCache: bool('For reload: bypass the HTTP cache.'),
+          browser: str('Optional browser brand filter/selection, e.g. Edge or Chrome. Defaults to the most recently connected browser.'),
           limit: int('Maximum tabs to list (default 50).'),
         },
         [],
@@ -299,22 +300,33 @@ class ToolRuntime {
         const bridge = this.#requireBridge()
         switch (action) {
           case 'list': {
-            const data = await bridge.command('tabs.list', {}, { signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
+            const data = await bridge.listTabs({ signal: exec?.signal, timeoutMs: 10_000, browser: args.browser })
             const tabs = (data?.tabs ?? []).slice(0, clamp(args.limit, 1, 200, 50))
             if (tabs.length === 0) return 'No controllable tabs found. Open an http(s) page and try again.'
             const active = tabs.find((tab) => tab.active)
             if (active) bridge.state.setActiveTab(active.id)
-            return [
-              `Tabs (${data?.tabs?.length ?? tabs.length} total):`,
-              ...tabs.map((tab) => {
+            const groups = new Map()
+            for (const tab of tabs) {
+              const key = tab.browser || 'Browser'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key).push(tab)
+            }
+            const lines = [`Tabs (${data?.tabs?.length ?? tabs.length} total across ${groups.size} browser(s)):`]
+            for (const [browser, items] of groups) {
+              lines.push(`[${browser}]`)
+              for (const tab of items) {
                 const flags = [tab.active ? 'ACTIVE' : null, tab.pinned ? 'pinned' : null, tab.discarded ? 'discarded' : null].filter(Boolean).join(',')
-                return `${flags ? `[${flags}] ` : ''}id=${tab.id} win=${tab.windowId} "${clip(tab.title ?? '', 80)}" ${tab.url ?? ''}`
-              }),
-            ].join('\n')
+                lines.push(`  ${flags ? `[${flags}] ` : ''}id=${tab.id} win=${tab.windowId} "${clip(tab.title ?? '', 80)}" ${tab.url ?? ''}`)
+              }
+            }
+            if (data?.errors?.length) {
+              lines.push(`Warnings: ${data.errors.map((error) => `${error.browser}: ${error.message}`).join('; ')}`)
+            }
+            return lines.join('\n')
           }
           case 'activate': {
             const tabId = requireTabId(args)
-            const data = await bridge.command('tabs.activate', { tabId }, { tabId, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
+            const data = await bridge.command('tabs.activate', { tabId }, { tabId, browser: args.browser, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
             bridge.state.setActiveTab(tabId)
             const tab = data?.tab ?? {}
             return `Activated tab ${tabId}: "${clip(tab.title ?? '', 120)}" ${tab.url ?? ''}`
@@ -322,6 +334,7 @@ class ToolRuntime {
           case 'open': {
             if (!args.url) throw new Error('browser_tabs action=open requires a url')
             const data = await bridge.command('tabs.open', { url: args.url, active: args.active !== false }, {
+              browser: args.browser,
               signal: exec?.signal,
               requiredCaps: ['tabs'],
               timeoutMs: 15_000,
@@ -332,13 +345,14 @@ class ToolRuntime {
           }
           case 'close': {
             const tabId = requireTabId(args)
-            await bridge.command('tabs.close', { tabId }, { tabId, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
+            await bridge.command('tabs.close', { tabId }, { tabId, browser: args.browser, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
             return `Closed tab ${tabId}.`
           }
           case 'reload': {
             const tabId = requireTabId(args)
             await bridge.command('tabs.reload', { tabId, bypassCache: args.bypassCache === true }, {
               tabId,
+              browser: args.browser,
               signal: exec?.signal,
               requiredCaps: ['tabs'],
               timeoutMs: 10_000,
@@ -348,7 +362,7 @@ class ToolRuntime {
           case 'back':
           case 'forward': {
             const tabId = requireTabId(args)
-            await bridge.command(`tabs.${action}`, { tabId }, { tabId, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
+            await bridge.command(`tabs.${action}`, { tabId }, { tabId, browser: args.browser, signal: exec?.signal, requiredCaps: ['tabs'], timeoutMs: 10_000 })
             return `${action === 'back' ? 'Went back' : 'Went forward'} in tab ${tabId}.`
           }
           default:

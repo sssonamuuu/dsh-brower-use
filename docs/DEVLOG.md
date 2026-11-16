@@ -7,6 +7,27 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-16 — 支持 Edge/Chrome 同时连接
+
+### 问题
+
+同一设备安装 Edge 和 Chrome 两个扩展时，后连接的 hello 会关闭前一个连接，导致只剩一个浏览器。
+
+### 实现
+
+- hello 只替换同一 `browser|brand` 的旧连接，不同浏览器保留。
+- 命令路由：`clientId` → tab 归属 → `browser` → 最近连接。
+- `#tabOwners` 记录 tab 属于哪个浏览器；`bridge.listTabs()` 并行汇总所有客户端。
+- `browser_tabs list` 和 `@` 路由使用合并后的 tabs，按浏览器分组展示。
+- `browser_status` 显示已连接浏览器数量。
+
+### 验证
+
+43/43 tests pass，新增双 FakeExtension 测试：Edge/Chrome 同时连接、tabs 合并、
+`page.read` 按 tabId 路由到正确浏览器。
+
+---
+
 ## 2026-11-13 — 诊断「连上了但命令全超时」
 
 ### 现象
