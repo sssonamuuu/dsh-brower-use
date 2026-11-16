@@ -642,6 +642,41 @@ async function execPage(tab, func, args, world, frameId) {
   return value
 }
 
+/**
+ * Per-command watchdog. `chrome.tabs.*` can hang forever when the service
+ * worker loses its API binding (observed after long idle or an extension
+ * reload); without a deadline the Host only sees silence and every later
+ * command times out too. Answering with an error keeps the bridge diagnosable
+ * and the message tells the user exactly what to do.
+ */
+const COMMAND_DEADLINES = new Map([
+  ['tabs.list', 8000],
+  ['tabs.active', 8000],
+  ['tabs.activate', 8000],
+  ['tabs.open', 15000],
+  ['system.ping', 3000],
+])
+const DEFAULT_COMMAND_DEADLINE_MS = 20000
+
+function commandDeadline(action) {
+  return COMMAND_DEADLINES.get(action) ?? DEFAULT_COMMAND_DEADLINE_MS
+}
+
+function withDeadline(promise, ms, action) {
+  let timer
+  const deadline = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(
+        `extension did not answer "${action}" within ${ms}ms — the service worker's chrome.* API looks unresponsive. Reload the extension at edge://extensions (or chrome://extensions) and retry.`,
+      )
+      error.code = 'EXTENSION_UNRESPONSIVE'
+      error.details = { action, deadlineMs: ms }
+      reject(error)
+    }, ms)
+  })
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
+}
+
 async function handleCommand(message) {
   const id = message.id
   const action = String(message.action || '')
@@ -649,7 +684,7 @@ async function handleCommand(message) {
   if (message.tabId != null) params.tabId = message.tabId
   if (message.frameId != null) params.frameId = message.frameId
   try {
-    const data = await runAction(action, params)
+    const data = await withDeadline(runAction(action, params), commandDeadline(action), action)
     if (cancelled.has(id)) {
       cancelled.delete(id)
       return
@@ -676,6 +711,11 @@ async function handleCommand(message) {
 async function runAction(action, params) {
   const frameId = params.frameId
   switch (action) {
+    case 'system.ping': {
+      // Deliberately touches no browser API: proves the service worker is
+      // alive and routing even when every tab call is stuck.
+      return { pong: Date.now(), version: EXTENSION_VERSION, alive: true }
+    }
     case 'tabs.list': {
       const tabs = await chrome.tabs.query({})
       return {

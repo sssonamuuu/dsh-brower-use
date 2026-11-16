@@ -7,6 +7,34 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-13 — 诊断「连上了但命令全超时」
+
+### 现象
+
+`@` 提到标签页后让 agent 读页面，`page.snapshot` / `page.read` / 甚至 `tabs.list` 全部
+超时，但 `/health` 一直显示 `clients: 1`，console/network 计数还在涨。
+
+### 结论
+
+扩展的 WebSocket 与事件通道是活的（事件来自 content script → relay → SW），但
+service worker 里的 `chrome.tabs.*` Promise 不 resolve：所有需要 tab 的命令都卡住，
+而 console/network 读取走 Host 缓冲，所以看起来「半死不活」。
+
+### 改动
+
+1. 扩展侧每条命令加 watchdog：`tabs.*` 8s、默认 20s；超时先于 Host 返回
+   `EXTENSION_UNRESPONSIVE`，并给出「重载扩展」的具体指引。
+2. 新增 `system.ping` 动作，不碰任何 `chrome.*`，用来证明 SW 活着且能路由。
+3. `browser_status` 主动 ping 一次：能答 → 正常；超时 → 直接输出
+   「socket 在但命令不响应，请重载扩展」。
+4. 静态测试锁定 watchdog 与 `system.ping` 不依赖 `chrome.*`。
+
+### 验证
+
+42/42 tests pass；真实环境仍需用户在 `edge://extensions` 重载一次扩展才能恢复命令通道。
+
+---
+
 ## 2026-11-13 — 支持在输入框 @ 当前标签页
 
 ### 背景

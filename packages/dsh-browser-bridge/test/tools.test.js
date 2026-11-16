@@ -28,7 +28,7 @@ function execute(definitions, name, args = {}) {
 test('browser_status reports auto-pair and connection state', async (t) => {
   const { bridge, definitions } = await makeToolkit(t)
   const text = await execute(definitions, 'browser_status')
-  assert.match(text, /DSH Browser Bridge v0\.1\.0/)
+  assert.match(text, /DSH Browser Bridge v0\.1\.1/)
   assert.match(text, /Auto-pair: enabled/)
   assert.match(text, /Extension: connected/)
   assert.match(text, /TestChrome 999\.0\.0\.0/)

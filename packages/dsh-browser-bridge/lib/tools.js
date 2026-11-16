@@ -231,7 +231,23 @@ class ToolRuntime {
               : 'It should connect automatically within a few seconds. If it does not, open the extension options and use the manual pairing code shown by browser_status.',
           )
         } else {
-          lines.push('The extension is ready. Use browser_tabs to see open tabs.')
+          const probe = await this.#probeExtension()
+          if (probe === 'ok') {
+            lines.push('The extension is ready. Use browser_tabs to see open tabs.')
+          } else if (probe === 'unresponsive') {
+            lines.push(
+              'The extension socket is open but it is NOT answering commands (its chrome.* API is stuck).',
+              'Fix: open edge://extensions (or chrome://extensions) and reload the DSH Browser Bridge extension, then call browser_status again.',
+              'Events already collected stay readable through browser_console / browser_network meanwhile.',
+            )
+          } else if (probe === 'timeout') {
+            lines.push(
+              'The extension did not answer a no-op ping in time; it may be reloading or the browser is busy.',
+              'If this repeats, reload the extension at edge://extensions.',
+            )
+          } else {
+            lines.push('The extension is ready. (Its version does not support the liveness probe; this is expected for extension builds before 0.1.1.)')
+          }
         }
         const stats = status.stats
         lines.push(`Buffers: ${stats.tabs} tab(s), ${stats.console} console entry(ies), ${stats.network} network request(s)`)
@@ -239,6 +255,28 @@ class ToolRuntime {
         return lines.join('\n')
       },
     )
+  }
+
+  /**
+   * Liveness probe that deliberately avoids chrome.* APIs on the extension
+   * side, so a hung `chrome.tabs` cannot masquerade as a missing extension.
+   * @returns {Promise<'ok'|'unresponsive'|'timeout'|'unsupported'>}
+   */
+  async #probeExtension() {
+    try {
+      await this.#bridge.command('system.ping', {}, { timeoutMs: 4000 })
+      return 'ok'
+    } catch (error) {
+      if (error?.code === 'CAPABILITY_MISSING') return 'unsupported'
+      if (error?.code === 'UNKNOWN_ACTION' || error?.code === 'UNSUPPORTED_ACTION') return 'unsupported'
+      if (error?.code === 'TIMEOUT') {
+        // A live worker answers in milliseconds; a socket that never replies to
+        // a no-op is the stuck-worker signature, not ordinary slowness.
+        return 'unresponsive'
+      }
+      if (error?.code === 'NO_CLIENT') return 'ok'
+      return 'unsupported'
+    }
   }
 
   #tabs() {

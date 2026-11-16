@@ -60,3 +60,18 @@ kind: "extension-guide"
 ## 排障
 
 见 [../docs/INSTALL.md](../docs/INSTALL.md#6-排障)。
+
+## Troubleshooting: connected but every command times out
+
+If `browser_status` says the extension is connected while `browser_tabs` times out, the
+service worker's `chrome.*` API has hung (seen after days of uptime or an extension
+hot-reload). The WebSocket and the console/network buffers keep working, which makes it
+look half-alive.
+
+1. Run `browser_status` — since 0.1.1 it pings the worker and says so explicitly.
+2. Open `edge://extensions` (or `chrome://extensions`) and click **Reload** on
+   DSH Browser Bridge.
+3. It reconnects on its own (auto-pair); no code is needed.
+
+The extension also bounds every command (8s for `tabs.*`, 20s otherwise) and answers with
+`EXTENSION_UNRESPONSIVE` instead of letting the Host time out silently.

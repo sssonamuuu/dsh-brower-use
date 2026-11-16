@@ -22,7 +22,7 @@ kind: "protocol-reference"
 {
   "app": "dsh-browser-bridge",
   "protocol": 1,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "autoPair": true,
   "pairing": true,
   "port": 47821
@@ -51,7 +51,7 @@ kind: "protocol-reference"
 成功 `200`：
 
 ```json
-{ "ok": true, "token": "64 hex chars", "protocol": 1, "port": 47821, "serverVersion": "0.1.0" }
+{ "ok": true, "token": "64 hex chars", "protocol": 1, "port": 47821, "serverVersion": "0.1.1" }
 ```
 
 失败：
@@ -91,6 +91,31 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 - 扩展未连接时返回 `503`，`error: "NO_CLIENT"`。
 - 只读；不会操作标签页。
 
+### 动作 `system.ping`
+
+不碰任何 `chrome.*` API 的存活探针：
+
+```json
+{"type":"command","id":"c_1","action":"system.ping","params":{}}
+{"type":"result","id":"c_1","ok":true,"data":{"pong":1770000000000,"version":"0.1.1","alive":true}}
+```
+
+用途：区分「扩展没连上」和「扩展 socket 在但 service worker 的 `chrome.*` 挂死」。
+后者在 Edge 长时间运行 / 扩展热重载后出现过，表现为所有 `tabs.*` / `page.*` 超时但
+console/network 事件仍在推送。
+
+### 错误码 `EXTENSION_UNRESPONSIVE`
+
+扩展侧给每条命令加了 watchdog（`tabs.*` 8s、`page.eval`/其它 20s）。超时后不等 Host
+自己超时，直接回：
+
+```json
+{"type":"result","id":"c_9","ok":false,"error":{
+  "code":"EXTENSION_UNRESPONSIVE",
+  "message":"extension did not answer \"tabs.list\" within 8000ms — … Reload the extension at edge://extensions",
+  "details":{"action":"tabs.list","deadlineMs":8000}}}
+```
+
 ### `GET /ws?token=…`
 
 WebSocket upgrade：
@@ -112,7 +137,7 @@ WebSocket upgrade：
     "browser": "chromium",
     "brand": "Chrome",
     "browserVersion": "146.0.0.0",
-    "extensionVersion": "0.1.0",
+    "extensionVersion": "0.1.1",
     "platform": "macOS",
     "caps": ["dom", "console", "network", "screenshot", "input", "frames", "tabs"]
   }
@@ -125,7 +150,7 @@ Host 校验 `protocol === 1`，回复：
 {
   "type": "hello_ok",
   "protocol": 1,
-  "serverVersion": "0.1.0",
+  "serverVersion": "0.1.1",
   "sessionId": "…",
   "heartbeatMs": 20000,
   "limits": { "maxCommandBytes": 8388608, "maxEventBytes": 262144 }

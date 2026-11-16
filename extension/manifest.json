@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DSH Browser Bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect the user's real Chrome/Edge tabs to DeepSeek Harness for frontend debugging: DOM, console, network, screenshots.",
   "minimum_chrome_version": "111",
   "permissions": [

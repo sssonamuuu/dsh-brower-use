@@ -7,7 +7,7 @@ export const PROTOCOL_VERSION = 1
 export const APP_ID = 'dsh-browser-bridge'
 export const DEFAULT_PORT = 47821
 export const PORT_RANGE = 10
-export const EXTENSION_VERSION = '0.1.0'
+export const EXTENSION_VERSION = '0.1.1'
 export const HEARTBEAT_MS = 20_000
 export const STORAGE = {
   token: 'dshBridge.token',

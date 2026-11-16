@@ -78,3 +78,16 @@ test('collector hooks console, fetch, XHR and errors', async () => {
     assert.match(collector, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
 })
+
+test('service worker bounds every command and answers a chrome-free ping', async () => {
+  const source = await readFile(path.join(extensionDir, 'background.js'), 'utf8')
+  // A stuck chrome.* binding must surface as an error, never as host silence.
+  assert.match(source, /COMMAND_DEADLINES/)
+  assert.match(source, /EXTENSION_UNRESPONSIVE/)
+  assert.match(source, /withDeadline\(runAction\(action, params\)/)
+  // system.ping must not touch chrome.* so it can prove the worker is alive.
+  const pingBlock = source.slice(source.indexOf("case 'system.ping'"))
+  const nextCase = pingBlock.indexOf('case ', 10)
+  const body = pingBlock.slice(0, nextCase === -1 ? 400 : nextCase)
+  assert.doesNotMatch(body, /chrome\./)
+})
