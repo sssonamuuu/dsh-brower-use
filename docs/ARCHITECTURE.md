@@ -155,7 +155,7 @@ Web composer 输入 @
   → Host webserver route
   → bridge.command('tabs.list')                  （WS 到扩展）
   → 返回 {browser:{brand}, tabs:[{id,title,url,favIconUrl,active,…}]}
-  → 候选行按「🌐 Edge/Chrome 浏览器标签」分组，行首显示 favicon
+  → 候选行按「浏览器图标 + Edge/Chrome 浏览器标签」分组，行首显示 favicon
   → 选中插入 [Browser tab id=123] 标题 — URL
   → 模型看到引用，调用 browser_snapshot {tabId:123}
 ```

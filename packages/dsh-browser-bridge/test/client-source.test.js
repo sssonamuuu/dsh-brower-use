@@ -47,6 +47,7 @@ test('client @ source maps open tabs to candidates and serializable references',
           tabs: [
             { id: 7, windowId: 1, title: 'Local app', url: 'http://localhost:3000/', favIconUrl: 'http://localhost:3000/favicon.ico', active: true, browser: 'Edge' },
             { id: 8, windowId: 1, title: 'Docs', url: 'http://localhost:3000/docs', favIconUrl: '', active: false, discarded: true, browser: 'Chrome' },
+            { id: 9, windowId: 1, title: 'Arc page', url: 'http://localhost:3000/arc', favIconUrl: '', active: false, browser: 'Arc' },
           ],
         }
       },
@@ -67,10 +68,13 @@ test('client @ source maps open tabs to candidates and serializable references',
   assert.equal(source.name, 'browser-tab')
 
   const rows = await source.candidates({}, { query: '', signal: new AbortController().signal })
-  assert.equal(rows.length, 2)
+  assert.equal(rows.length, 3)
   assert.equal(rows[0].name, 'Local app')
   assert.match(textOf(rows[0].section), /Edge 浏览器标签/)
   assert.match(textOf(rows[1].section), /Chrome 浏览器标签/)
+  const edgeLogo = rows[0].section.children.find((child) => child?.type === 'img')
+  assert.match(edgeLogo.props.src, /^data:image\/svg\+xml/)
+  assert.match(textOf(rows[2].section), /^A浏览器标签$/)
   assert.match(rows[0].description, /localhost:3000/)
   assert.match(rows[0].description, /当前/)
   assert.match(rows[1].description, /已休眠/)
