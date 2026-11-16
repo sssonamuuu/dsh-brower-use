@@ -1,5 +1,5 @@
 ---
-description: "Architecture of DSH Browser Bridge: extension layers, host plugin, browser abstraction, security model, and why CDP is not the default."
+description: "Architecture of DSH Browser Bridge: extension layers, host plugin, browser abstraction, security model, and on-demand CDP debugging."
 kind: "project-architecture"
 ---
 
@@ -58,16 +58,17 @@ Chrome」，必须用独立 `--user-data-dir` 重启 —— 现有标签页和�
 - 登录 Cookie / LocalStorage / IndexedDB / SSO 全部原样保留。
 - 不需要重启浏览器，不需要关 DevTools。
 - 可以长期驻留，断线自动重连。
-- 仍然能在页面 MAIN world 执行 JS、hook `console` / `fetch`。
+- 通过 `chrome.debugger` 的 CDP 会话按需获取 console / network；
+- 页面 DOM / 页面动作仍通过 `chrome.scripting` 完成。
 
-代价：不是完整 CDP。没有 `Network.getResponseBody` 的底层能力，只能拿到 JS 层可见的数据；
-没有 trusted input（DOM `click()` 产生的是 untrusted 事件）；截图只能截可见视口。
+代价：attach 时浏览器显示“正在调试此浏览器”；page action 是 DOM 级模拟，不是 trusted input；
+截图只能截可见视口；CDP 无法回溯 attach 前的事件。
 
 ## 3. 扩展侧分层
 
 | 文件 | world | 职责 | 为什么在这一层 |
 |---|---|---|---|
-| `content/collector.js` | MAIN | hook `console`、`window.onerror`、`unhandledrejection`、`fetch`、XHR | 隔离世界改 `console` 抓不到页面自己的日志 |
+| `content/collector.js` | MAIN | 旧版 hook 采集器，默认不注入；保留兼容 | 隔离世界改 `console` 抓不到页面自己的日志 |
 | `content/relay.js` | ISOLATED | 校验 `window.postMessage` 来源，转发到 background | MAIN 不能直接用 `chrome.runtime`；隔离世界是可信边界 |
 | `background.js` | SW | WS、重连、命令路由、`scripting.executeScript`、tab 操作、截图 | 唯一能同时访问 `chrome.*` 和网络的地方 |
 | `popup/options` | extension page | 自动连接、状态、后备配对/token/端口 | 用户操作界面 |
@@ -145,13 +146,14 @@ Host 侧缓冲的原因：
 明确信任假设：**能读到 `state.json` 的本机进程已经拥有同等权限**。这不是防本机恶意软件的
 方案，是防网页/局域网误连的方案。
 
-## 6.0 采集器按需注入
+## 6.0 按需 CDP 调试
 
-为减少页面反调试检测，扩展默认**不在所有页面自动注入** MAIN-world collector。
+为减少页面反调试检测和页面卡死，扩展默认**不 attach debugger、不注入 collector**。
 `@` 选择标签页后，DSH client 调用 Host `/api/browser-bridge/arm`，扩展执行
-`collector.ensure`，只对该标签页注入 relay + collector；该标签页之后导航时，扩展会为已 arm
-的标签页重新注入。`browser_snapshot` / `browser_read` 等页面动作也会在目标标签页显式 arm，
-因此普通浏览页面不会改写 `console` / `fetch` / `XMLHttpRequest`。
+`collector.ensure`，对该标签页 `chrome.debugger.attach(..., '1.3')` 并启用
+`Runtime.enable` / `Network.enable`；浏览器显示“正在调试此浏览器”。30 秒无操作自动 detach，
+关闭标签页也会 detach。`browser_snapshot` / `browser_read` 等页面动作通过 `chrome.scripting`
+执行，不自动 attach。
 
 ## 6.1.1 多浏览器并存
 
@@ -220,22 +222,19 @@ extension/
 - `action` 命名空间（`tabs.*` / `page.*` / `debugger.*`）；
 - 错误码 `UNSUPPORTED_ACTION` / `CAPABILITY_MISSING`。
 
-## 9. 后续：`chrome.debugger` 可选模式
+## 9. 当前：按需 `chrome.debugger` 模式
 
-需要完整 CDP 时：
-
-- attach `chrome.debugger`，使用 `Runtime.evaluate`（绕过 CSP）、`Page.captureScreenshot`（可整页）、
-  `Input.dispatchMouseEvent`（trusted input）、`Network.getResponseBody`（完整响应体）。
-- 标签页会出现「正在调试此浏览器」提示条。
+- `@` 选择标签页后才 `chrome.debugger.attach(..., "1.3")`，启用 `Runtime.enable` / `Network.enable`。
+- 通过 `Runtime.consoleAPICalled` / `Network.*` 获取 console / network，不修改页面原生函数。
+- 标签页会出现“正在调试此浏览器”提示条；30 秒无操作自动 detach，关闭 tab 也 detach。
 - **与 DevTools 互斥**：用户开着 DevTools 时 attach 失败。
-- 设计为 `browser_eval` / `browser_screenshot` / `browser_click` 的可选 `useDebugger` 参数，
-  用完自动 detach；默认关闭。
+- 不自动 attach 未 `@` 的页面；`browser_snapshot` / `browser_read` 不依赖 debugger。
 
 ## 10. 已知限制
 
-- console/network 是「注入之后」的观测，不是浏览器历史。
-- `fetch` 响应体只读文本类内容（JSON/HTML/JS/XML），且 ≤256KB；二进制不读。
-- `XMLHttpRequest` 的 `responseType` 为 `blob`/`arraybuffer` 时不读 body。
+- console/network 是「attach 之后」的观测，不是浏览器历史。
+- CDP 响应体只读文本类内容（JSON/HTML/JS/XML），且 ≤256KB；二进制 / event-stream 不读。
+- 明确反调试的站点仍可能拒绝 CDP 调试。
 - 点击/输入是 DOM 级模拟，不是 trusted input；少数依赖 `isTrusted` 或原生文件选择器的场景不支持。
 - 截图会激活目标标签页；多窗口下会切换焦点。
 - `chrome://`、扩展商店等受限页面无法注入。

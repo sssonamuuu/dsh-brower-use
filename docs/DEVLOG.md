@@ -7,6 +7,30 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-16 — 切换到按需 CDP 调试
+
+### 背景
+
+直接注入 collector 在 tianyan 等重页面会导致卡死；同时站点会检测 `fetch` / XHR 被改写。
+改为浏览器原生调试协议（`chrome.debugger`）。
+
+### 实现
+
+- manifest 增加 `debugger` 权限
+- `@` 选择页面后调用 `collector.ensure` → `chrome.debugger.attach(1.3)` + `Runtime.enable` + `Network.enable`
+- 通过 `Runtime.consoleAPICalled` / `Network.*` 收集 console/network，不修改页面函数
+- 30 秒无操作自动 detach；关闭 tab 自动 detach；不会在所有页面 attach
+- 仅主 frame；跳过 event-stream、二进制和大响应体
+- 旧 collector 保留为兼容代码，默认不注入
+
+### 边界
+
+- 浏览器会显示“正在调试此浏览器”提示
+- 不能回溯 attach 之前已发生的 console/network
+- 明确反调试的页面仍可能拒绝调试
+
+---
+
 ## 2026-11-16 — 采集器改为按需注入，避免反调试误报
 
 ### 问题

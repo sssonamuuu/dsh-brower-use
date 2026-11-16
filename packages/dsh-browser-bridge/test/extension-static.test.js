@@ -27,12 +27,14 @@ test('extension manifest is valid MV3 and injects collectors only on demand', as
   assert.ok(manifest.permissions.includes('scripting'))
   assert.ok(manifest.host_permissions.includes('<all_urls>'))
   assert.equal(manifest.background.type, 'module')
-  // Do not auto-inject MAIN-world hooks on every page; @-picking a tab arms it.
+  assert.ok(manifest.permissions.includes('debugger'))
+  // Do not auto-inject MAIN-world hooks on every page; @-picking a tab attaches CDP.
   assert.equal(manifest.content_scripts, undefined)
   const background = await readFile(path.join(extensionDir, 'background.js'), 'utf8')
   assert.match(background, /collector\.ensure/)
   assert.match(background, /armedTabs/)
-  assert.match(background, /content\/collector\.js/)
+  assert.match(background, /chrome\.debugger/)
+  assert.match(background, /Network\.enable/)
 })
 
 test('extension and host agree on the protocol version', async () => {

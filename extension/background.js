@@ -20,6 +20,10 @@ const BADGE_OFF = '#dc2626'
 const BADGE_PAIR = '#d97706'
 const BADGE_ERR = '#7c3aed'
 const AUTO_PAIR_HEADER = 'x-dsh-bridge-client'
+const DEBUGGER_PROTOCOL = '1.3'
+const DEBUGGER_IDLE_MS = 30_000
+const DEBUGGER_MAX_BODY = 256 * 1024
+const debuggerSessions = new Map()
 
 let settings = { token: '', port: null, autoConnect: true }
 let initPromise = null
@@ -525,10 +529,76 @@ function injectable(url) {
   return /^(https?|file):/i.test(url) && !isRestrictedUrl(url)
 }
 
-async function injectCollector(tabId) {
-  const target = { tabId }
-  await chrome.scripting.executeScript({ target, files: ['content/relay.js'], world: 'ISOLATED' })
-  await chrome.scripting.executeScript({ target, files: ['content/collector.js'], world: 'MAIN' })
+function debuggerAttach(tabId) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach({ tabId: Number(tabId) }, DEBUGGER_PROTOCOL, () => {
+      const error = chrome.runtime.lastError
+      if (error) reject(makeError('DEBUGGER_ATTACH_FAILED', error.message))
+      else resolve()
+    })
+  })
+}
+
+function debuggerDetach(tabId) {
+  return new Promise((resolve) => {
+    chrome.debugger.detach({ tabId: Number(tabId) }, () => {
+      void chrome.runtime.lastError
+      resolve()
+    })
+  })
+}
+
+function debuggerSend(tabId, method, params = {}) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand({ tabId: Number(tabId) }, method, params, (result) => {
+      const error = chrome.runtime.lastError
+      if (error) reject(makeError('DEBUGGER_COMMAND_FAILED', error.message))
+      else resolve(result)
+    })
+  })
+}
+
+function touchDebugger(tabId) {
+  const session = debuggerSessions.get(Number(tabId))
+  if (!session) return
+  clearTimeout(session.timer)
+  session.timer = setTimeout(() => { detachDebugger(tabId).catch(() => {}) }, DEBUGGER_IDLE_MS)
+  session.timer.unref?.()
+}
+
+async function attachDebugger(tabId) {
+  const id = Number(tabId)
+  if (debuggerSessions.has(id)) {
+    touchDebugger(id)
+    return { attached: true, tabId: id }
+  }
+  await debuggerAttach(id)
+  try {
+    await debuggerSend(id, 'Runtime.enable')
+    await debuggerSend(id, 'Network.enable')
+    await debuggerSend(id, 'Page.enable').catch(() => {})
+  } catch (error) {
+    await debuggerDetach(id)
+    throw makeError('DEBUGGER_UNAVAILABLE', error instanceof Error ? error.message : String(error))
+  }
+  debuggerSessions.set(id, { tabId: id, timer: null, responses: new Map(), attachedAt: Date.now() })
+  touchDebugger(id)
+  return { attached: true, tabId: id }
+}
+
+async function detachDebugger(tabId) {
+  const id = Number(tabId)
+  const session = debuggerSessions.get(id)
+  if (!session) {
+    armedTabs.delete(id)
+    return { detached: false, tabId: id }
+  }
+  clearTimeout(session.timer)
+  debuggerSessions.delete(id)
+  await debuggerDetach(id)
+  armedTabs.delete(id)
+  await saveArmedTabs()
+  return { detached: true, tabId: id }
 }
 
 async function saveArmedTabs() {
@@ -540,16 +610,16 @@ async function armTab(tabId) {
   if (!injectable(tab.url)) {
     throw makeError('RESTRICTED_PAGE', `page is not injectable: ${tab.url || ''}`)
   }
+  await attachDebugger(tab.id)
   armedTabs.add(tab.id)
   await saveArmedTabs()
-  await injectCollector(tab.id)
-  return { armed: true, tabId: tab.id, tab: tabInfo(tab) }
+  return { armed: true, debuggerAttached: true, tabId: tab.id, tab: tabInfo(tab) }
 }
 
 async function disarmTab(tabId) {
-  const removed = armedTabs.delete(Number(tabId))
-  if (removed) await saveArmedTabs()
-  return { armed: false, tabId: Number(tabId) }
+  const id = Number(tabId)
+  await detachDebugger(id)
+  return { armed: false, debuggerAttached: false, tabId: id }
 }
 
 async function restoreArmedTabs() {
@@ -561,9 +631,133 @@ async function restoreArmedTabs() {
       changed = true
       continue
     }
-    injectCollector(tabId).catch(() => {})
+    attachDebugger(tabId).catch(() => {})
   }
   if (changed) await saveArmedTabs()
+}
+
+function cdpArgValue(arg) {
+  if (!arg) return null
+  if (Object.prototype.hasOwnProperty.call(arg, 'value')) return arg.value
+  if (arg.unserializableValue !== undefined) return arg.unserializableValue
+  return arg.description ?? arg.type ?? null
+}
+
+function cdpStack(stackTrace) {
+  if (!stackTrace || !Array.isArray(stackTrace.callFrames) || stackTrace.callFrames.length === 0) return undefined
+  return stackTrace.callFrames.slice(0, 20).map((frame) => {
+    const name = frame.functionName || '(anonymous)'
+    const url = frame.url || ''
+    return `${name} (${url}:${(frame.lineNumber ?? 0) + 1}:${(frame.columnNumber ?? 0) + 1})`
+  }).join('\n')
+}
+
+function cdpTextLike(mimeType) {
+  const type = String(mimeType || '').toLowerCase()
+  if (/event-stream|octet-stream|image\/|video\/|audio\/|font\/|application\/(pdf|zip|gzip|x-rar)/.test(type)) return false
+  return !type || /json|text|javascript|xml|x-www-form-urlencoded|graphql|html/.test(type)
+}
+
+function cdpClip(text, max = DEBUGGER_MAX_BODY) {
+  const value = String(text ?? '')
+  return value.length > max ? `${value.slice(0, max)}… [truncated ${value.length - max} chars]` : value
+}
+
+function handleDebuggerEvent(source, method, params) {
+  const tabId = Number(source?.tabId)
+  if (!Number.isFinite(tabId)) return
+  const session = debuggerSessions.get(tabId)
+  if (!session) return
+  touchDebugger(tabId)
+  if (method === 'Runtime.consoleAPICalled') {
+    const type = String(params.type || 'log')
+    const level = type === 'warning' ? 'warn' : type === 'assert' ? 'error' : type
+    const args = (params.args || []).map(cdpArgValue)
+    const text = args.map((value) => typeof value === 'string' ? value : JSON.stringify(value)).join(' ')
+    sendEvent(tabId, 0, 'console', {
+      level: ['log', 'info', 'warn', 'error', 'debug'].includes(level) ? level : 'log',
+      args,
+      text: cdpClip(text, 8000),
+      ...(cdpStack(params.stackTrace) ? { stack: cdpStack(params.stackTrace) } : {}),
+    })
+    return
+  }
+  if (method === 'Runtime.exceptionThrown') {
+    const details = params.exceptionDetails || {}
+    const exception = details.exception || {}
+    const text = exception.description || details.text || 'Uncaught exception'
+    sendEvent(tabId, 0, 'console', {
+      level: 'error',
+      args: [cdpArgValue(exception)],
+      text: cdpClip(text, 8000),
+      ...(cdpStack(details.stackTrace) ? { stack: cdpStack(details.stackTrace) } : {}),
+    })
+    return
+  }
+  if (method === 'Network.requestWillBeSent') {
+    const request = params.request || {}
+    session.responses.set(String(params.requestId), {
+      startedAt: Number(params.timestamp) || 0,
+      request,
+    })
+    sendEvent(tabId, 0, 'network.request', {
+      id: String(params.requestId),
+      method: String(request.method || 'GET').toUpperCase(),
+      url: String(request.url || ''),
+      type: String(params.type || 'fetch').toLowerCase(),
+      ...(request.headers ? { requestHeaders: request.headers } : {}),
+      ...(typeof request.postData === 'string' ? { body: cdpClip(request.postData, 4096) } : {}),
+    })
+    return
+  }
+  if (method === 'Network.responseReceived') {
+    const response = params.response || {}
+    const info = session.responses.get(String(params.requestId)) || {}
+    const durationMs = info.startedAt ? Math.round((Number(params.timestamp) - info.startedAt) * 1000) : undefined
+    sendEvent(tabId, 0, 'network.response', {
+      id: String(params.requestId),
+      status: Number(response.status),
+      statusText: String(response.statusText || ''),
+      responseHeaders: response.headers || {},
+      mimeType: String(response.mimeType || ''),
+      ...(Number.isFinite(durationMs) ? { durationMs } : {}),
+      url: String(response.url || info.request?.url || ''),
+    })
+    info.response = response
+    session.responses.set(String(params.requestId), info)
+    return
+  }
+  if (method === 'Network.loadingFailed') {
+    const info = session.responses.get(String(params.requestId))
+    sendEvent(tabId, 0, 'network.error', {
+      id: String(params.requestId),
+      message: String(params.errorText || 'network failed'),
+    })
+    session.responses.delete(String(params.requestId))
+    return
+  }
+  if (method === 'Network.loadingFinished') {
+    const requestId = String(params.requestId)
+    const info = session.responses.get(requestId)
+    if (info && cdpTextLike(info.response?.mimeType)) {
+      const headers = info.response?.headers || {}
+      const declared = Number(headers['content-length'] ?? headers['Content-Length'])
+      const encoded = Number(params.encodedDataLength)
+      if ((!Number.isFinite(declared) || declared <= DEBUGGER_MAX_BODY * 2)
+        && (!Number.isFinite(encoded) || encoded <= DEBUGGER_MAX_BODY * 2)) {
+        debuggerSend(tabId, 'Network.getResponseBody', { requestId }).then((body) => {
+          if (!body || body.base64Encoded || typeof body.body !== 'string') return
+          sendEvent(tabId, 0, 'network.body', {
+            id: requestId,
+            body: cdpClip(body.body),
+            truncated: body.body.length > DEBUGGER_MAX_BODY,
+            size: body.body.length,
+          })
+        }).catch(() => {})
+      }
+    }
+    session.responses.delete(requestId)
+  }
 }
 
 function makeError(code, message, details) {
@@ -812,37 +1006,30 @@ async function runAction(action, params) {
     }
     case 'page.snapshot': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'snapshot' }], 'ISOLATED', frameId)
     }
     case 'page.read': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'read' }], 'ISOLATED', frameId)
     }
     case 'page.click': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'click' }], 'ISOLATED', frameId)
     }
     case 'page.type': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'type' }], 'ISOLATED', frameId)
     }
     case 'page.press': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'press' }], 'ISOLATED', frameId)
     }
     case 'page.scroll': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'scroll' }], 'ISOLATED', frameId)
     }
     case 'page.wait': {
       const tab = await resolveTab(params.tabId)
-      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'wait' }], 'ISOLATED', frameId)
     }
     case 'page.eval': {
@@ -850,7 +1037,6 @@ async function runAction(action, params) {
       if (typeof params.expression !== 'string' || params.expression.trim() === '') {
         throw makeError('BAD_REQUEST', 'expression is required')
       }
-      await armTab(tab.id)
       return await execPage(tab, pageEval, [params.expression, params.awaitPromise !== false], 'MAIN', frameId)
     }
     case 'page.screenshot': {
@@ -995,6 +1181,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   if (!connected) return
   sendEvent(tabId, 0, 'tab.removed', { tabId })
   seqByTab.delete(tabId)
+})
+
+chrome.debugger.onEvent.addListener(handleDebuggerEvent)
+chrome.debugger.onDetach.addListener((source, reason) => {
+  const tabId = Number(source?.tabId)
+  if (!Number.isFinite(tabId)) return
+  debuggerSessions.delete(tabId)
+  if (armedTabs.delete(tabId)) saveArmedTabs().catch(() => {})
+  if (reason) setStatus('debugger-detached', { lastError: null })
 })
 
 init().catch((error) => setError(error))

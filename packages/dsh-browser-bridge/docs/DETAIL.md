@@ -53,7 +53,8 @@ link:/Users/liaoqingsong/Github/dsh-brower-use/packages/dsh-browser-bridge
 - WebSocket 需要持久 token；token 文件权限 `0600`
 - 自动配对只向扩展 Origin 或带本机证明头的客户端下发 token
 - 扩展需要 `<all_urls>` 才能读取用户当前页面的 DOM / console / network，这是调试已登录页面的必要权限
-- 默认不会自动注入采集器；只有在 DSH 输入框用 `@` 选择某个标签页后才注入，以减少页面反调试检测
+- 默认不会自动注入采集器；只有在 DSH 输入框用 `@` 选择某个标签页后才 attach `chrome.debugger`，浏览器会显示“正在调试此浏览器”提示；30 秒无操作后自动 detach
+- 控制台和网络通过 CDP 捕获，不修改页面原生 `console` / `fetch` / `XMLHttpRequest`；页面启动前已发生的事件无法回溯
 - 插件不把 console / network 数据写入磁盘；截图只写到工作区 `.dsh-browser/`
 
 ## 限制

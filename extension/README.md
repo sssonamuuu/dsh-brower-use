@@ -19,16 +19,16 @@ kind: "extension-guide"
 > `scripts/e2e-chrome.mjs` 用的是 CDP `Extensions.loadUnpacked`（需要
 > `--enable-unsafe-extension-debugging` + `--remote-debugging-pipe`），仅用于开发验证。
 
-## 采集器注入策略
+## 调试附加策略
 
-默认**不会**在每个页面自动注入采集器，避免部分站点检测到原生 `console` / `fetch` / XHR 被改写后提示“当前环境正在被调试”。
+默认**不会**在每个页面注入 collector，也不会自动 attach debugger。只有在 DSH 输入框用 `@` 选择某个标签页后，扩展才通过 `chrome.debugger` attach 到该标签页，浏览器会显示“正在调试此浏览器”提示。
 
-- 普通打开网页：只连接本地桥，不注入 MAIN-world collector
-- 在 DSH 输入框用 `@` 选择某个标签页：才对该标签页注入 collector
-- 该标签页之后发生导航，扩展会为这个已 arm 的标签页重新注入
-- `browser_snapshot` / `browser_read` / 点击 / 截图仍可独立工作；console / network 只从注入后开始记录
+- 捕获 console / network 使用 CDP（`Runtime.enable` / `Network.enable`），不修改页面原生 `console` / `fetch` / `XMLHttpRequest`
+- 30 秒无操作后自动 detach；关闭标签页也会 detach
+- `browser_snapshot` / `browser_read` / 点击 / 截图仍通过 `chrome.scripting` 工作，不依赖 debugger
+- 页面启动时已经发生的 console / network 事件无法回溯，attach 后需刷新页面重新触发
 
-## 自动连接
+## 自动连接## 自动连接
 
 1. 扩展加载后自动扫描 `127.0.0.1:47821-47830`。
 2. 找到 DSH bridge 后，bridge 只向扩展 Origin 下发 token（网页 Origin 拿不到）。
@@ -51,7 +51,7 @@ kind: "extension-guide"
 
 ## 架构
 
-- `content/collector.js`（MAIN world）：**按需注入**，在用户通过 `@` 选择一个标签页后才 hook `console`、`window.onerror`、`unhandledrejection`、`fetch`、XHR；普通浏览不注入。
+- `content/collector.js`（MAIN world）：旧版 hook 采集器，保留为兼容代码；默认不注入。当前调试使用 `chrome.debugger` CDP。
 - `content/relay.js`（ISOLATED world）：校验 `window.postMessage` 来源后转发给 background。
 - `background.js`：WS 连接、端口扫描、配对、命令执行、tab 管理、重连。
 - `page-scripts.js`：通过 `chrome.scripting.executeScript` 注入到页面的自包含函数。
