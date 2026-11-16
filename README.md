@@ -94,6 +94,10 @@ token 持久化在 `~/.dsh/browser-bridge/state.json`（0600），DSH 重启后�
 - 截图只能截当前可见视口（`captureVisibleTab`），不是整页；会短暂激活目标标签页。
 - Firefox / Safari 目前只有架构预留，没有实现。见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
+## 发布
+
+发布浏览器扩展和 DSH 插件见 [docs/PUBLISH.md](docs/PUBLISH.md)。
+
 ## 文档
 
 - [计划与范围](docs/PLAN.md)
@@ -113,7 +117,7 @@ extension/                      MV3 扩展（Chrome / Edge 共用）
   background.js                 WS 连接、重连、命令执行、tab 管理
   options.html/js               自动连接、后备配对、token/端口
   popup.html/js                 状态与后备配对
-packages/dsh-browser-bridge/    DSH Host 插件
+packages/dsh-browser-bridge/    DSH Host 插件（@sssonamuuu/dsh-browser-bridge）
   lib/index.js                  cordis 插件入口 + 工具注册
   lib/bridge-server.js          HTTP + WebSocket 服务、自动配对、客户端管理
   lib/ws.js                     零依赖 WebSocket 服务端实现

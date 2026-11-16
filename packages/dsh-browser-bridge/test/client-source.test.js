@@ -22,7 +22,7 @@ test('client @ source maps open tabs to candidates and serializable references',
     },
   }
   await import(pathToFileURL(path.join(root, 'packages/dsh-browser-bridge/lib/client.js')).href)
-  assert.equal(captured.entry.id, 'dsh-browser-bridge')
+  assert.equal(captured.entry.id, '@sssonamuuu/dsh-browser-bridge')
   const React = {
     createElement(type, props, ...children) {
       return { type, props: props ?? {}, children }

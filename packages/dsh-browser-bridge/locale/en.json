@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH Browser Bridge",
+    "description": "Inspect and debug the real Chrome or Edge tabs already open on this machine: DOM, console, network, screenshots, and page actions, through a local browser extension bridge.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH 浏览器桥",
+    "description": "通过本机浏览器扩展连接并调试已登录的 Chrome 或 Edge 标签页：DOM、控制台、网络请求、截图和页面操作，全部走本地回环桥。",
+    "detail": "docs/DETAIL.md"
+  }
+}

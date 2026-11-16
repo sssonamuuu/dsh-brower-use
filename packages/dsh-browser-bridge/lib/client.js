@@ -7,7 +7,7 @@
  * route `/api/browser-bridge/tabs`.
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-browser-bridge',
+  id: '@sssonamuuu/dsh-browser-bridge',
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports

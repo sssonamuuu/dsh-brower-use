@@ -1,7 +1,7 @@
 {
-  "name": "dsh-browser-bridge",
+  "name": "@sssonamuuu/dsh-browser-bridge",
   "version": "0.1.1",
-  "description": "DSH host plugin: inspect and debug the user's real Chrome/Edge tabs through a local browser extension bridge",
+  "description": "DSH browser bridge: inspect and debug the user's real Chrome/Edge tabs through a local browser extension bridge.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,13 +10,17 @@
     "./package.json": "./package.json",
     "./client": {
       "default": "./lib/client.js"
-    }
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png"
   },
   "files": [
     "lib/**/*.js",
     "cordis.patch.yml",
     "README.md",
-    "lib/client.js"
+    "locale/*.json",
+    "docs",
+    "icon.png"
   ],
   "keywords": [
     "dsh-plugin",
@@ -40,5 +44,14 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js"
+  },
+  "author": "sssonamuuu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sssonamuuu/dsh-brower-use.git",
+    "directory": "packages/dsh-browser-bridge"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.1"
   }
 }

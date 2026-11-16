@@ -77,7 +77,7 @@ export async function apply(ctx, rawConfig = {}) {
         let clientPath = null
         let error = null
         try {
-          clientPath = clientModules?.clientPath?.('dsh-browser-bridge') ?? null
+          clientPath = clientModules?.clientPath?.('@sssonamuuu/dsh-browser-bridge') ?? null
         } catch (problem) {
           error = problem instanceof Error ? problem.message : String(problem)
         }

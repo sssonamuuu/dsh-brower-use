@@ -4,7 +4,7 @@
 # extension scans port..port+portRange-1 for GET /hello.
 - insert:
     - id: browser-bridge
-      name: dsh-browser-bridge
+      name: '@sssonamuuu/dsh-browser-bridge'
       config:
         port: 47821
         portRange: 10

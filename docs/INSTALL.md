@@ -24,7 +24,7 @@ pnpm add link:/Users/liaoqingsong/Github/dsh-brower-use/packages/dsh-browser-bri
 # 2) 在 profile 的 cordis.patch.yml 追加行（或让 DSH 的 Plugins 页面启用 bundle）
 cat >> cordis.patch.yml <<'YAML'
 - id: browser-bridge
-  name: dsh-browser-bridge
+  name: '@sssonamuuu/dsh-browser-bridge'
   config:
     port: 47821
     portRange: 10
@@ -45,7 +45,7 @@ plugin_manager install_bundle  target=link:/Users/liaoqingsong/Github/dsh-brower
 返回 `application: applied` 即已热加载；`plugin_manager list_plugins` 应出现：
 
 ```
-{ "entryId": "include:browser-bridge", "moduleName": "dsh-browser-bridge", "enabled": true, "fiberPhase": "active" }
+{ "entryId": "include:browser-bridge", "moduleName": "@sssonamuuu/dsh-browser-bridge", "enabled": true, "fiberPhase": "active" }
 ```
 
 验证桥：
@@ -178,5 +178,5 @@ content script 改动还需要刷新页面。
 
 1. 扩展：`chrome://extensions` → 移除。
 2. Host 插件：Plugins 页面关闭 / 移除 bundle，或从 profile 的 `cordis.patch.yml` 删除
-   `browser-bridge` 行并 `pnpm remove dsh-browser-bridge`。
+   `browser-bridge` 行并 `pnpm remove @sssonamuuu/dsh-browser-bridge`。
 3. 可选：删除 `~/.dsh/browser-bridge/state.json` 和 `<workspace>/.dsh-browser/`。
