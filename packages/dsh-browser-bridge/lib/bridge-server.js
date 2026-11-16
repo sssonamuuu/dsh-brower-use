@@ -252,6 +252,11 @@ export class BridgeServer extends EventEmitter {
     const wanted = options.browser ? String(options.browser).toLowerCase() : ''
     const clients = [...this.#clients].filter((client) => client.conn.open
       && (!wanted || `${client.info.brand ?? ''} ${client.info.browser ?? ''}`.toLowerCase().includes(wanted)))
+    // Put the browser the user is currently driving first; its @ group then
+    // leads the menu without changing the per-browser contiguity.
+    if (this.#active && clients.includes(this.#active)) {
+      clients.sort((left, right) => left === this.#active ? -1 : right === this.#active ? 1 : 0)
+    }
     if (clients.length === 0) {
       throw new BridgeError(
         ERROR.NO_CLIENT,
@@ -391,7 +396,9 @@ export class BridgeServer extends EventEmitter {
       tokenHandoff: 'extension-origin-or-explicit-client-header',
       pairingCode: this.#auth.pairCode,
       stateFile: this.stateFile,
-      clients: [...this.#clients].map((client) => ({
+      clients: [...this.#clients]
+        .sort((left, right) => left === this.#active ? -1 : right === this.#active ? 1 : 0)
+        .map((client) => ({
         id: client.id,
         browser: client.info.browser,
         brand: client.info.brand,
