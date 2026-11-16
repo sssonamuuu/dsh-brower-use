@@ -1,7 +1,5 @@
 /**
  * Protocol constants shared by the extension's module scripts.
- * Content scripts cannot import modules, so content/collector.js and
- * content/relay.js repeat the channel name.
  */
 export const PROTOCOL_VERSION = 1
 export const APP_ID = 'dsh-browser-bridge'

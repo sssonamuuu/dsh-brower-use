@@ -1171,7 +1171,6 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 })
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!connected) return
-  if (changeInfo.status === 'complete' && armedTabs.has(Number(tabId))) injectCollector(tabId).catch(() => {})
   if (!changeInfo.url && !changeInfo.title && !changeInfo.status) return
   const change = changeInfo.url ? 'url' : changeInfo.title ? 'title' : 'status'
   sendEvent(tabId, 0, 'tab.updated', { tabId, change, tab: tabInfo(tab) })

@@ -45,7 +45,7 @@ test('extension and host agree on the protocol version', async () => {
 
 test('all extension scripts parse with node --check', async () => {
   const files = (await walk(extensionDir)).filter((file) => file.endsWith('.js'))
-  assert.ok(files.length >= 6)
+  assert.ok(files.length >= 5)
   for (const file of files) {
     const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' })
     assert.equal(result.status, 0, `${file}\n${result.stderr}`)
@@ -71,13 +71,6 @@ test('background imports the injected page scripts', async () => {
   assert.match(background, /captureVisibleTab/)
   assert.match(background, /x-dsh-bridge-client/)
   assert.match(background, /auto-pair|autoPair|AUTO_PAIR_HEADER/i)
-})
-
-test('collector hooks console, fetch, XHR and errors', async () => {
-  const collector = await readFile(path.join(extensionDir, 'content/collector.js'), 'utf8')
-  for (const marker of ['console[level]', 'window.fetch', 'XMLHttpRequest.prototype', 'unhandledrejection', "addEventListener('error'"]) {
-    assert.match(collector, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-  }
 })
 
 test('service worker bounds every command and answers a chrome-free ping', async () => {

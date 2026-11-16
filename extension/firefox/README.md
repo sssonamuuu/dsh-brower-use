@@ -13,7 +13,7 @@ v0.1 只实现 Chromium。Firefox 的差异集中在这里：
    `background.js` 的 `chrome.*` 调用抽成 `platform/chromium.js` /
    `platform/firefox.js`。
 3. **注入器**：`scripting.executeScript` 的 `world: "MAIN"` 在 Firefox 里的行为需要
-   单独验证；collector 的 hook 逻辑（`content/collector.js`）可以复用，但注入方式要重写。
+   单独验证；旧 collector hook 已删除，Firefox 适配应优先实现 `chrome.debugger` 对应的 CDP 能力。
 4. **深度模式**：`chrome.debugger` 对应 `browser.debugger`，协议不同，v0.1 不实现。
 5. **能力声明**：握手时 `browser: "firefox"`、`caps` 只声明已验证的能力（例如先只给
    `tabs` + `dom` + `screenshot`，console/network 验证后再加）。

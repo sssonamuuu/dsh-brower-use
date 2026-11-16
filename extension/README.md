@@ -51,8 +51,6 @@ kind: "extension-guide"
 
 ## 架构
 
-- `content/collector.js`（MAIN world）：旧版 hook 采集器，保留为兼容代码；默认不注入。当前调试使用 `chrome.debugger` CDP。
-- `content/relay.js`（ISOLATED world）：校验 `window.postMessage` 来源后转发给 background。
 - `background.js`：WS 连接、端口扫描、配对、命令执行、tab 管理、重连。
 - `page-scripts.js`：通过 `chrome.scripting.executeScript` 注入到页面的自包含函数。
 - `popup.html` / `options.html`：状态、配对、token/端口配置。
