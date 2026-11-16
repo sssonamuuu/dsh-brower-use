@@ -99,7 +99,12 @@ export async function apply(ctx, rawConfig = {}) {
         }
         try {
           const data = await bridge.command('tabs.list', {}, { timeoutMs: 5000 })
-          return jsonResponse({ ok: true, tabs: data.tabs ?? [] }, 200)
+          const client = bridge.status().clients[0] ?? null
+          const browser = client
+            ? { brand: client.brand, engine: client.browser, version: client.browserVersion }
+            : null
+          const tabs = (data.tabs ?? []).map((tab) => ({ ...tab, browser: browser?.brand ?? '' }))
+          return jsonResponse({ ok: true, browser, tabs }, 200)
         } catch (error) {
           const code = error?.code ?? 'NO_CLIENT'
           return jsonResponse(

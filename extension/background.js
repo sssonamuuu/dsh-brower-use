@@ -483,6 +483,7 @@ function tabInfo(tab) {
     index: tab.index,
     title: tab.title ?? '',
     url: tab.url ?? '',
+    favIconUrl: tab.favIconUrl ?? '',
     active: tab.active === true,
     pinned: tab.pinned === true,
     status: tab.status ?? 'unknown',

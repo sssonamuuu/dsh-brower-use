@@ -5,6 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 
+function textOf(node) {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  return textOf(node.children)
+}
+
 test('client @ source maps open tabs to candidates and serializable references', async (t) => {
   const captured = {}
   globalThis.window = {
@@ -16,7 +23,15 @@ test('client @ source maps open tabs to candidates and serializable references',
   }
   await import(pathToFileURL(path.join(root, 'packages/dsh-browser-bridge/lib/client.js')).href)
   assert.equal(captured.entry.id, 'dsh-browser-bridge')
-  const exports = captured.entry.factory()
+  const React = {
+    createElement(type, props, ...children) {
+      return { type, props: props ?? {}, children }
+    },
+  }
+  const exports = captured.entry.factory((specifier) => {
+    assert.equal(specifier, 'react')
+    return React
+  })
   assert.equal(typeof exports.apply, 'function')
   assert.deepEqual(exports.inject, ['inputTriggers'])
 
@@ -28,9 +43,10 @@ test('client @ source maps open tabs to candidates and serializable references',
       async json() {
         return {
           ok: true,
+          browser: { brand: 'Edge', engine: 'chromium', version: '157.0.0.0' },
           tabs: [
-            { id: 7, windowId: 1, title: 'Local app', url: 'http://localhost:3000/', active: true },
-            { id: 8, windowId: 1, title: 'Docs', url: 'http://localhost:3000/docs', active: false, discarded: true },
+            { id: 7, windowId: 1, title: 'Local app', url: 'http://localhost:3000/', favIconUrl: 'http://localhost:3000/favicon.ico', active: true, browser: 'Edge' },
+            { id: 8, windowId: 1, title: 'Docs', url: 'http://localhost:3000/docs', favIconUrl: '', active: false, discarded: true, browser: 'Chrome' },
           ],
         }
       },
@@ -53,9 +69,16 @@ test('client @ source maps open tabs to candidates and serializable references',
   const rows = await source.candidates({}, { query: '', signal: new AbortController().signal })
   assert.equal(rows.length, 2)
   assert.equal(rows[0].name, 'Local app')
+  assert.match(textOf(rows[0].section), /Edge 浏览器标签/)
+  assert.match(textOf(rows[1].section), /Chrome 浏览器标签/)
   assert.match(rows[0].description, /localhost:3000/)
-  assert.match(rows[0].description, /active/)
-  assert.match(rows[1].description, /discarded/)
+  assert.match(rows[0].description, /当前/)
+  assert.match(rows[1].description, /已休眠/)
+  assert.equal(typeof rows[0].icon, 'function')
+  const icon = rows[0].icon({ size: 14 })
+  assert.equal(icon.type, 'span')
+  const faviconImage = icon.children.find((child) => child?.type === 'img')
+  assert.equal(faviconImage.props.src, 'http://localhost:3000/favicon.ico')
 
   const filtered = await source.candidates({}, { query: 'docs', signal: new AbortController().signal })
   assert.equal(filtered.length, 1)

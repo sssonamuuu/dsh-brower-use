@@ -81,8 +81,18 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 ```json
 {
   "ok": true,
+  "browser": { "brand": "Edge", "engine": "chromium", "version": "157.0.0.0" },
   "tabs": [
-    { "id": 123, "windowId": 1, "index": 0, "title": "App", "url": "http://localhost:3000/", "active": true }
+    {
+      "id": 123,
+      "windowId": 1,
+      "index": 0,
+      "title": "App",
+      "url": "http://localhost:3000/",
+      "favIconUrl": "http://localhost:3000/favicon.ico",
+      "active": true,
+      "browser": "Edge"
+    }
   ]
 }
 ```
