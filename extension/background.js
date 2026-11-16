@@ -526,7 +526,7 @@ function injectable(url) {
 }
 
 async function injectCollector(tabId) {
-  const target = { tabId, allFrames: true }
+  const target = { tabId }
   await chrome.scripting.executeScript({ target, files: ['content/relay.js'], world: 'ISOLATED' })
   await chrome.scripting.executeScript({ target, files: ['content/collector.js'], world: 'MAIN' })
 }

@@ -21,6 +21,7 @@ kind: "development-log"
 - 只注入被选中的标签页；该 tab 导航后自动重新注入
 - `browser_snapshot` / `browser_read` / click 等页面动作在目标 tab 上显式 arm
 - 新增 armedTabs 本地持久化；关闭 tab 自动清理
+- 采集器现在只注入主 frame；跳过 `text/event-stream`、二进制/大响应体，并限制 XHR 大 body 读取
 - 更新静态测试与文档
 
 ### 注意

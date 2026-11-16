@@ -211,13 +211,21 @@
 
   function textLike(contentType) {
     const type = String(contentType || '').toLowerCase()
+    // Never read streaming or binary bodies: this is the main source of page
+    // stalls on dashboards with long-lived responses or large downloads.
+    if (/event-stream|octet-stream|image\/|video\/|audio\/|font\/|application\/(pdf|zip|gzip|x-rar)/.test(type)) return false
     return !type || /json|text|javascript|xml|x-www-form-urlencoded|graphql|html/.test(type)
   }
 
   async function readResponseBody(response, contentType) {
     if (!textLike(contentType)) return null
-    if (response.type === 'opaque' || response.type === 'opaqueredirect') return null
-    const clone = response.clone()
+    if (response.type === 'opaque' || response.type === 'opaqueredirect' || response.bodyUsed) return null
+    let clone
+    try {
+      clone = response.clone()
+    } catch {
+      return null
+    }
     const contentLength = Number(response.headers.get('content-length'))
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY * 2) {
       return { body: null, truncated: true, size: contentLength }
@@ -383,9 +391,13 @@
               url: this.responseURL || meta.url,
             })
             let text = null
-            if (this.responseType === '' || this.responseType === 'text') {
+            const contentType = String(this.getResponseHeader('content-type') || '')
+            const contentLength = Number(this.getResponseHeader('content-length'))
+            const bodyAllowed = textLike(contentType)
+              && (!Number.isFinite(contentLength) || contentLength <= MAX_BODY * 2)
+            if (bodyAllowed && (this.responseType === '' || this.responseType === 'text')) {
               text = this.responseText
-            } else if (this.responseType === 'json' && this.response) {
+            } else if (bodyAllowed && this.responseType === 'json' && this.response) {
               try {
                 text = JSON.stringify(this.response)
               } catch {
