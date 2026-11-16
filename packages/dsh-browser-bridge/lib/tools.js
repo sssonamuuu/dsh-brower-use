@@ -282,7 +282,7 @@ class ToolRuntime {
   #tabs() {
     return browserTool(
       'browser_tabs',
-      'List or control the user\'s real browser tabs (Chrome/Edge). Actions: list (default), activate, open, close, reload, back, forward. Use "list" before acting when you need a tab id. Prefer operating on the user\'s existing tab instead of opening a new one, because the existing tab carries the user\'s login session.',
+      'List or control the user\'s real browser tabs (Chrome/Edge). Actions: list (default), activate, open, close, reload, back, forward. Use "list" before acting when you need a tab id. Prefer an existing tab; when a new page is needed, action=open creates a tab in the user\'s existing browser window with their cookies and login state, not a separate unauthenticated browser. Use this for web lookups when the extension is connected.',
       objectSchema(
         {
           action: enumStr('Operation to perform. Defaults to list.', ['list', 'activate', 'open', 'close', 'reload', 'back', 'forward']),
@@ -923,10 +923,10 @@ function imageSize(buffer, format) {
 
 /** Text inserted into the system prompt so models know the tool family exists. */
 export const SYSTEM_PROMPT = [
-  'The browser_* tools operate the user\'s real Chrome/Edge tabs, including logged-in pages. Prefer them when the user asks to inspect or debug the page they are looking at, rather than opening a new unauthenticated page.',
+  'The browser_* tools operate the user\'s real Chrome/Edge tabs, including logged-in pages. When the extension is connected and a task needs a web page or web lookup, prefer browser_tabs: reuse a matching existing tab, or use action=open with the target/search URL to open a tab in the user\'s existing browser window. Do not use web_search/web_fetch or launch a separate unauthenticated browser when the user\'s cookies or login state may matter; those sessions are not available to server-side fetches.',
   'Call browser_status first if tool calls report that the extension is not connected.',
   'Before clicking or typing on an unfamiliar page, call browser_snapshot and use the returned ref; refs expire after navigation.',
-  'For frontend debugging, browser_console and browser_network show only events captured after the extension was injected. browser_screenshot saves a PNG path; use read_image to view it.',
+  'For frontend debugging, browser_console and browser_network show only events captured after the @-selected page was attached through chrome.debugger; they are not retroactive. browser_screenshot saves a PNG path; use read_image to view it.',
   'Never run destructive JavaScript through browser_eval unless the user explicitly asks for it.',
 ].join(' ')
 
