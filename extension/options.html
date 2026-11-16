@@ -88,7 +88,7 @@
         <li>Chrome 用 <code>chrome://extensions</code>，Edge 用 <code>edge://extensions</code>，打开开发者模式，加载本仓库的 <code>extension/</code> 目录。</li>
         <li>同一个扩展目录可以同时被 Chrome / Edge / Brave 加载，不需要改代码。</li>
         <li>“检测端口”会扫描 47821-47830，显示找到的 bridge 版本和是否允许配对。</li>
-        <li>工具读不到 console/network 时：确认扩展是在页面加载前就启用，或刷新页面后重新触发。</li>
+        <li>工具读不到 console/network 时：先 @ 选择该页面（触发 debugger attach），再刷新页面重新触发请求。</li>
         <li>截图只截当前可见视口；点击是 DOM 级事件，不是 trusted input。</li>
         <li>完整文档见仓库 <code>docs/INSTALL.md</code> 和 <code>docs/TESTING.md</code>。</li>
       </ul>

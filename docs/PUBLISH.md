@@ -20,9 +20,11 @@
 当前扩展权限是：
 
 ```text
-tabs, scripting, storage, alarms
+debugger, tabs, scripting, storage, alarms
 host_permissions: http://127.0.0.1/*, http://localhost/*, <all_urls>
 ```
+
+`debugger` 仅用于用户通过 `@` 明确选择标签页后按需 attach，30 秒无操作自动 detach；商店审核需要说明这一点。
 
 商店审核重点是 `<all_urls>` 和读取页面内容的用途。商品页需要明确写：
 
