@@ -9,6 +9,14 @@ Host half of [DSH Browser Bridge](../../README.md). It starts an HTTP/WebSocket
 server on loopback, pairs with the browser extension, buffers console/network
 events, and registers the `browser_*` tools on `ctx.tools`.
 
+**The other half is the browser extension.** Install it from Edge Add-ons
+<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>
+(CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`), or load
+[`extension/`](../../extension) unpacked. Neither half works alone: without the
+extension every tool call returns `NO_CLIENT`; without this plugin the extension
+scans an empty port range and stays `OFF`. Their versions move independently —
+they only need a matching `PROTOCOL_VERSION` (currently `1`).
+
 This package intentionally has **no runtime dependencies**: it implements the
 WebSocket server itself and uses raw JSON Schema tool definitions. That keeps a
 linked profile package resolvable without a local `node_modules`.

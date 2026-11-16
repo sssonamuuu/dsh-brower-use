@@ -31,7 +31,12 @@ link:/Users/liaoqingsong/Github/dsh-brower-use/packages/dsh-browser-bridge
 
 ### 2. 浏览器扩展
 
-从 Chrome Web Store / Edge Add-ons 安装 `DSH Browser Bridge`，或在浏览器扩展页加载本仓库的 `extension/` 目录。
+- Edge Add-ons：<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>
+  （CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`）
+- 开发版：在浏览器扩展页「加载已解压」本仓库的 `extension/` 目录
+
+两个产物必须同时安装：只装插件时工具返回 `NO_CLIENT`，只装扩展时状态 `OFF`。
+两端版本号独立，只要求协议版本一致（当前 `1`）。
 
 扩展会自动发现本机 DSH 桥并自动配对，不需要手动输入配对码。端口默认是 `47821`，会在 `47821..47830` 范围内自动探测。
 

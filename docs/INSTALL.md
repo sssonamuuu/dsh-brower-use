@@ -12,6 +12,21 @@ kind: "install-guide"
 - Node 22+（仅开发/测试需要；日常使用不需要 Node）。
 - DSH profile 可用 `pnpm`。
 
+## 0.1 两个产物的关系（先读这里）
+
+| 产物 | 标识 | 从哪拿 |
+|---|---|---|
+| Host 插件 | `@sssonamuuu/dsh-browser-bridge` | npm，或本地 `link:`（第 1 节） |
+| 浏览器扩展 | DSH Browser Bridge，CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal` | Edge Add-ons，或本仓库 `extension/`（第 2 节） |
+
+**两个都必须装，缺一个就用不了：**
+
+- 只有插件：`browser_*` 工具全部返回 `NO_CLIENT`。
+- 只有扩展：扫描不到 `127.0.0.1:47821-47830` 的桥，状态 `OFF`。
+
+两端版本号独立（扩展 `0.1.1` + npm `0.1.2` 可互连），只要求协议版本一致——当前 `1`。
+安装顺序推荐「先插件、后扩展」，见 [PROTOCOL.md](PROTOCOL.md) 的 `GET /hello` 与自动配对流程。
+
 ## 1. 安装 Host 插件
 
 ### 方式 A：作为链接包安装（开发推荐）
@@ -67,6 +82,15 @@ node scripts/dev-bridge.mjs
 它会单独启动桥，打印端口、token 和配对码，适合先验证扩展通路。
 
 ## 2. 加载扩展
+
+### 从商店安装（普通用户）
+
+Edge Add-ons：<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>
+（CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`）。点「获取」即可，它连的仍是本机
+`127.0.0.1` 的 DSH 桥，不需要登录任何账号。Chrome Web Store 条目上线前，Chrome
+用户用下面的「加载已解压」流程。
+
+### 开发版：加载已解压
 
 1. 打开 `chrome://extensions`（Edge 是 `edge://extensions`）。
 2. 打开右上角「开发者模式」。

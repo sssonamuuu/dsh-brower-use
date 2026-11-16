@@ -20,6 +20,23 @@
                                         └──────────────────────────────┘
 ```
 
+## 产品构成：两个产物，缺一不可
+
+本产品由**两个独立发布、必须配合使用**的产物组成：
+
+| 产物 | 标识 | 运行位置 | 获取方式 |
+|---|---|---|---|
+| DSH Host 插件 | `@sssonamuuu/dsh-browser-bridge` | DSH 宿主进程内的 Cordis 插件，提供 `browser_*` 工具和本机桥 | npm：<https://www.npmjs.com/package/@sssonamuuu/dsh-browser-bridge>；开发期可 `link:` 到 [`packages/dsh-browser-bridge`](packages/dsh-browser-bridge) |
+| 浏览器扩展 | DSH Browser Bridge（CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`） | 你日常使用的 Chrome / Edge | Edge Add-ons：<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>；或「加载已解压」本仓库 [`extension/`](extension/) |
+
+**关联关系：**
+
+- 两端通过 `127.0.0.1:47821-47830` 上的 WebSocket 通信，协议版本 `1`（见 [PROTOCOL](docs/PROTOCOL.md)）。
+- **只装插件**：`browser_*` 工具在，但每次调用返回 `NO_CLIENT`——没有扩展来连桥。
+- **只装扩展**：扩展扫描不到桥，工具栏状态 `OFF`——DSH 里根本没有这些工具。
+- 两端版本号**独立演进**，只要求协议版本兼容：扩展 `0.1.1` + npm `0.1.2` 就是可用组合。
+- 推荐顺序：先装插件（让桥监听 `47821`），再装/重载扩展（自动发现并配对）；反过来也能连上，只是扩展会先退避重试。
+
 ## 现在能做什么
 
 | 能力 | 工具 | 说明 |
@@ -44,6 +61,14 @@
 
 ### 1. 安装 DSH 宿主插件
 
+普通用户在 DSH 的 **Plugins → Add plugin** 里装：
+
+```text
+@sssonamuuu/dsh-browser-bridge@0.1.2
+```
+
+开发时用本地链接包：
+
 ```bash
 # 在 DSH Web 里对我说「安装 browser bridge 插件」，或手动：
 # 把本目录 link 进当前 profile
@@ -57,7 +82,12 @@ pnpm add link:/Users/liaoqingsong/Github/dsh-brower-use/packages/dsh-browser-bri
 
 ### 2. 加载浏览器扩展
 
-Chrome：`chrome://extensions` → 打开「开发者模式」→「加载已解压的扩展程序」→ 选择
+**商店安装（普通用户）**：Edge Add-ons 打开
+<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>
+（CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`），点「获取」。装好后它自动连本机桥，
+不需要任何账号。
+
+**开发版**：Chrome：`chrome://extensions` → 打开「开发者模式」→「加载已解压的扩展程序」→ 选择
 本仓库的 [`extension/`](extension/) 目录。Edge 同理，地址是 `edge://extensions`。
 同一份目录可以直接被 Chrome / Edge / Brave / Arc / Vivaldi 加载。
 

@@ -7,6 +7,16 @@
 
 扩展和 Host 插件版本可以独立更新，但协议版本必须兼容（当前 `PROTOCOL_VERSION=1`）。
 
+| 产物 | 版本来源 | 发布通道 | 线上标识 | 与另一端的耦合点 |
+|---|---|---|---|---|
+| Host 插件 | `packages/dsh-browser-bridge/package.json` | npm，可选插件市场索引 | 包名 `@sssonamuuu/dsh-browser-bridge`<br><https://www.npmjs.com/package/@sssonamuuu/dsh-browser-bridge> | `PROTOCOL_VERSION=1`；`GET /hello` 返回 `app: "dsh-browser-bridge"` |
+| 浏览器扩展 | `extension/manifest.json` | Edge Add-ons（Chrome Web Store 待上架） | CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`<br><https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal> | 同一协议版本；只连接 `127.0.0.1:47821-47830` 的桥 |
+
+**发版顺序：** 协议兼容的改动，两端先后无所谓；协议不兼容的改动必须**先发 Host 插件**
+（新 Host 同时接受旧、新协议），**再发扩展**——反过来会让旧 Host 收到新消息直接报错。
+**回滚：** 商店扩展可回滚到上一版本，npm 不能回滚已发布版本，只能发更高版本号——所以
+协议不兼容的改动必须两端都发，并在 `PROTOCOL.md` 里先立好新协议版本。
+
 ## 一、发布浏览器扩展
 
 ### 1. 发布前检查
@@ -131,6 +141,12 @@ cd packages/dsh-browser-bridge
 npm pack --dry-run
 ```
 
+注册表不允许覆盖已发布版本，所以**每次发布前必须先升版本号**：
+
+```bash
+npm version patch   # 0.1.2 -> 0.1.3
+```
+
 确认打包列表包含：
 
 - `lib/**/*.js`（包括 `lib/client.js`）
@@ -248,3 +264,7 @@ git push origin v0.1.2
 - **DSH 插件显示技术名/默认图标**：检查 `locale/*.json`、`icon.png`、`exports`、`files` 是否被 `npm pack` 包含
 - **安装后插件不加载**：确认 `cordis.patch.yml` 的 `name` 与 `package.json.name` 完全一致
 - **商店拒绝 `<all_urls>`**：补充权限用途说明；如果仍被拒，考虑企业内部分发或改为按需授权
+- **npm `E403 You cannot publish over the previously published versions: x.y.z`**：版本号已存在，注册表不允许覆盖，`--force` 无效。`npm version patch` 升号后再发。
+- **npm 发布后 `npm view` 仍显示旧版本**：`latest` 标签和 CDN 有 1-5 分钟传播延迟，不能作为失败判据。用 `npm view <pkg>@<version> dist.integrity` 断言具体版本。
+- **Edge 更新一直停在「正在草拟」**：说明提交未完成——不是被拒。回到合作伙伴中心打开该版本，补全商店信息、隐私政策 URL、权限用途说明、截图，点「提交认证」，变成「正在审核」才算发出。
+- **Edge 商店页仍是上一版**：更新在认证队列里时公开页继续服务旧版本，属正常状态。

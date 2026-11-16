@@ -8,6 +8,19 @@ kind: "project-docs-index"
 项目目标：让 DSH Agent 在用户**日常使用、已登录**的 Chromium 浏览器标签页上完成前端调试，
 而不是另开一个无登录态的浏览器。
 
+## 交付物
+
+本仓库交付两个必须配合使用的产物，版本号独立、协议版本必须一致（当前 `1`）：
+
+| 交付物 | 标识 | 相关文档 |
+|---|---|---|
+| DSH Host 插件（npm） | `@sssonamuuu/dsh-browser-bridge` | [INSTALL](INSTALL.md) · [PUBLISH](PUBLISH.md) · [包 README](../packages/dsh-browser-bridge/README.md) |
+| 浏览器扩展（Edge Add-ons） | DSH Browser Bridge，CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal` | [INSTALL](INSTALL.md) · [PUBLISH](PUBLISH.md) · [扩展 README](../extension/README.md) |
+
+- 只有插件：`browser_*` 返回 `NO_CLIENT`。
+- 只有扩展：扫描不到本机桥，状态 `OFF`。
+- 二者关系与连接流程见根目录 [README](../README.md) 和 [PROTOCOL](PROTOCOL.md)。
+
 ## 阅读顺序
 
 1. [PLAN.md](PLAN.md) —— 范围、阶段、验收标准、明确不做的事。

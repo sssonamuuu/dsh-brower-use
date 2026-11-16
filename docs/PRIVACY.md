@@ -2,6 +2,15 @@
 
 DSH Browser Bridge 是一个本地开发调试工具。
 
+## 适用于哪些产物
+
+同一份说明覆盖该产品的两个产物；商店提交时隐私政策 URL 指向本文件即可。
+
+| 产物 | 标识 | 渠道 |
+|---|---|---|
+| DSH Host 插件 | `@sssonamuuu/dsh-browser-bridge` | npm：<https://www.npmjs.com/package/@sssonamuuu/dsh-browser-bridge> |
+| 浏览器扩展 | DSH Browser Bridge | Edge Add-ons：<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>（CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`） |
+
 ## 收集的数据
 
 浏览器扩展在用户主动使用 DSH 调试时，会读取用户当前标签页的：

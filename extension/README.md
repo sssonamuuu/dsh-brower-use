@@ -7,6 +7,23 @@ kind: "extension-guide"
 
 一份 MV3 扩展，Chrome / Edge / Brave / Arc / Vivaldi 共用同一个目录。
 
+## 这不是完整产品
+
+`extension/` 只是 **DSH Browser Bridge 的浏览器端**。另一半是 DSH Host 插件
+[`@sssonamuuu/dsh-browser-bridge`](https://www.npmjs.com/package/@sssonamuuu/dsh-browser-bridge)，
+源码在 [`../packages/dsh-browser-bridge`](../packages/dsh-browser-bridge)，负责注册
+`browser_*` 工具、起本机桥、缓冲 console / network。
+
+| 装了什么 | 结果 |
+|---|---|
+| 只有本扩展 | 扫描不到 `127.0.0.1:47821-47830` 的桥，工具栏状态 `OFF` |
+| 只有 Host 插件 | 工具存在，但每次调用返回 `NO_CLIENT` |
+| 两者都装 | 自动配对，状态 `ON`，工具可用 |
+
+商店版本（Edge Add-ons）：<https://microsoftedge.microsoft.com/addons/detail/nacbbfdhmahhdhbghahfogpljnegjdal>
+（CRX ID `nacbbfdhmahhdhbghahfogpljnegjdal`）。下面是**开发版**的加载方式；完整安装顺序见
+[INSTALL](../docs/INSTALL.md)。
+
 ## 加载
 
 1. `chrome://extensions`（Edge：`edge://extensions`）。
@@ -28,7 +45,7 @@ kind: "extension-guide"
 - `browser_snapshot` / `browser_read` / 点击 / 截图仍通过 `chrome.scripting` 工作，不依赖 debugger
 - 页面启动时已经发生的 console / network 事件无法回溯，attach 后需刷新页面重新触发
 
-## 自动连接## 自动连接
+## 自动连接
 
 1. 扩展加载后自动扫描 `127.0.0.1:47821-47830`。
 2. 找到 DSH bridge 后，bridge 只向扩展 Origin 下发 token（网页 Origin 拿不到）。
