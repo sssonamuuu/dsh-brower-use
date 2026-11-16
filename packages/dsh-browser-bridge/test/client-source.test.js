@@ -36,7 +36,12 @@ test('client @ source maps open tabs to candidates and serializable references',
   assert.deepEqual(exports.inject, ['inputTriggers'])
 
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async (url) => {
+  const armed = []
+  globalThis.fetch = async (url, options = {}) => {
+    if (url === '/api/browser-bridge/arm') {
+      armed.push(JSON.parse(options.body))
+      return { ok: true, async json() { return { ok: true, armed: true } } }
+    }
     assert.equal(url, '/api/browser-bridge/tabs')
     return {
       ok: true,
@@ -92,6 +97,8 @@ test('client @ source maps open tabs to candidates and serializable references',
   assert.equal(filtered[0].name, 'Docs')
 
   const picked = source.onPick({ candidate: rows[0] })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.deepEqual(armed, [{ tabId: 7 }])
   assert.equal(picked.insert.source, 'browser-tab')
   assert.equal(picked.insert.label, 'Local app')
   assert.match(picked.insert.clipboardText, /Browser tab id=7/)

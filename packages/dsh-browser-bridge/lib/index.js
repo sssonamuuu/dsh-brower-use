@@ -112,6 +112,45 @@ export async function apply(ctx, rawConfig = {}) {
         }
       },
     }), 'browser-bridge: @ tabs route')
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/api/browser-bridge/arm',
+      resource: async (request) => {
+        const origin = request.headers.get('origin')
+        const host = request.headers.get('host')
+        const sameOrigin = origin === `http://${host}` || origin === `https://${host}`
+        if (origin && !sameOrigin && origin !== 'null') {
+          return jsonResponse({ ok: false, error: 'forbidden' }, 403)
+        }
+        if (request.method !== 'POST') {
+          return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405, { allow: 'POST' })
+        }
+        let payload
+        try {
+          payload = await request.json()
+        } catch {
+          return jsonResponse({ ok: false, error: 'bad_request' }, 400)
+        }
+        const tabId = Number(payload?.tabId)
+        if (!Number.isFinite(tabId)) {
+          return jsonResponse({ ok: false, error: 'bad_request', message: 'tabId is required' }, 400)
+        }
+        try {
+          const data = await bridge.command('collector.ensure', { tabId }, {
+            tabId,
+            timeoutMs: 5000,
+            requiredCaps: ['dom'],
+          })
+          return jsonResponse({ ok: true, ...data }, 200)
+        } catch (error) {
+          return jsonResponse({
+            ok: false,
+            error: error?.code ?? 'ARM_FAILED',
+            message: error instanceof Error ? error.message : String(error),
+          }, error?.code === 'NO_CLIENT' ? 503 : 400)
+        }
+      },
+    }), 'browser-bridge: arm route')
   })
 
   await ctx.effect(async () => {

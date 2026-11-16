@@ -19,6 +19,15 @@ kind: "extension-guide"
 > `scripts/e2e-chrome.mjs` 用的是 CDP `Extensions.loadUnpacked`（需要
 > `--enable-unsafe-extension-debugging` + `--remote-debugging-pipe`），仅用于开发验证。
 
+## 采集器注入策略
+
+默认**不会**在每个页面自动注入采集器，避免部分站点检测到原生 `console` / `fetch` / XHR 被改写后提示“当前环境正在被调试”。
+
+- 普通打开网页：只连接本地桥，不注入 MAIN-world collector
+- 在 DSH 输入框用 `@` 选择某个标签页：才对该标签页注入 collector
+- 该标签页之后发生导航，扩展会为这个已 arm 的标签页重新注入
+- `browser_snapshot` / `browser_read` / 点击 / 截图仍可独立工作；console / network 只从注入后开始记录
+
 ## 自动连接
 
 1. 扩展加载后自动扫描 `127.0.0.1:47821-47830`。
@@ -42,8 +51,7 @@ kind: "extension-guide"
 
 ## 架构
 
-- `content/collector.js`（MAIN world）：在 `document_start` hook
-  `console`、`window.onerror`、`unhandledrejection`、`fetch`、XHR。
+- `content/collector.js`（MAIN world）：**按需注入**，在用户通过 `@` 选择一个标签页后才 hook `console`、`window.onerror`、`unhandledrejection`、`fetch`、XHR；普通浏览不注入。
 - `content/relay.js`（ISOLATED world）：校验 `window.postMessage` 来源后转发给 background。
 - `background.js`：WS 连接、端口扫描、配对、命令执行、tab 管理、重连。
 - `page-scripts.js`：通过 `chrome.scripting.executeScript` 注入到页面的自包含函数。

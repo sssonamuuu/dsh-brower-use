@@ -226,6 +226,19 @@ window.__ModuleLoader__.load({
       }
     }
 
+    function armTab(tabId) {
+      try {
+        void fetch('/api/browser-bridge/arm', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tabId: Number(tabId) }),
+          keepalive: true,
+        }).catch(() => {})
+      } catch {
+        // arming is best-effort; the tab reference still inserts normally
+      }
+    }
+
     async function fetchTabs(signal) {
       const response = await fetch('/api/browser-bridge/tabs', {
         signal,
@@ -293,6 +306,7 @@ window.__ModuleLoader__.load({
         onPick({ candidate }) {
           const tab = parseValue(candidate?.value)
           if (!tab) return { text: '' }
+          armTab(tab.id)
           return {
             insert: {
               source: SOURCE_NAME,

@@ -20,20 +20,19 @@ async function walk(dir) {
   return files
 }
 
-test('extension manifest is valid MV3 with MAIN and ISOLATED content scripts', async () => {
+test('extension manifest is valid MV3 and injects collectors only on demand', async () => {
   const manifest = JSON.parse(await readFile(path.join(extensionDir, 'manifest.json'), 'utf8'))
   assert.equal(manifest.manifest_version, 3)
   assert.ok(manifest.permissions.includes('tabs'))
   assert.ok(manifest.permissions.includes('scripting'))
   assert.ok(manifest.host_permissions.includes('<all_urls>'))
   assert.equal(manifest.background.type, 'module')
-  const worlds = manifest.content_scripts.map((script) => script.world)
-  assert.ok(worlds.includes('MAIN'))
-  assert.ok(worlds.includes('ISOLATED'))
-  for (const script of manifest.content_scripts) {
-    assert.equal(script.run_at, 'document_start')
-    assert.equal(script.all_frames, true)
-  }
+  // Do not auto-inject MAIN-world hooks on every page; @-picking a tab arms it.
+  assert.equal(manifest.content_scripts, undefined)
+  const background = await readFile(path.join(extensionDir, 'background.js'), 'utf8')
+  assert.match(background, /collector\.ensure/)
+  assert.match(background, /armedTabs/)
+  assert.match(background, /content\/collector\.js/)
 })
 
 test('extension and host agree on the protocol version', async () => {

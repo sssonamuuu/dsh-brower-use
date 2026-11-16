@@ -145,6 +145,14 @@ Host 侧缓冲的原因：
 明确信任假设：**能读到 `state.json` 的本机进程已经拥有同等权限**。这不是防本机恶意软件的
 方案，是防网页/局域网误连的方案。
 
+## 6.0 采集器按需注入
+
+为减少页面反调试检测，扩展默认**不在所有页面自动注入** MAIN-world collector。
+`@` 选择标签页后，DSH client 调用 Host `/api/browser-bridge/arm`，扩展执行
+`collector.ensure`，只对该标签页注入 relay + collector；该标签页之后导航时，扩展会为已 arm
+的标签页重新注入。`browser_snapshot` / `browser_read` 等页面动作也会在目标标签页显式 arm，
+因此普通浏览页面不会改写 `console` / `fetch` / `XMLHttpRequest`。
+
 ## 6.1.1 多浏览器并存
 
 Host 维护 `#clients` 集合，不再用单例 `#active` 代表全部连接：

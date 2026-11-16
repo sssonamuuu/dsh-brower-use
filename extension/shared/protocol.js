@@ -14,6 +14,7 @@ export const STORAGE = {
   port: 'dshBridge.port',
   serverVersion: 'dshBridge.serverVersion',
   autoConnect: 'dshBridge.autoConnect',
+  armedTabs: 'dshBridge.armedTabs',
   lastError: 'dshBridge.lastError',
 }
 export const CAPS = ['tabs', 'dom', 'console', 'network', 'screenshot', 'input', 'frames']

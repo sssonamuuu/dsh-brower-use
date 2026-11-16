@@ -36,7 +36,7 @@ let lastPong = 0
 let queue = []
 let cancelled = new Set()
 let seqByTab = new Map()
-let collectorsRunning = false
+let armedTabs = new Set()
 let intentionalClose = false
 let connectionFailures = 0
 const RELAY_EVENTS = new Set(['console', 'network.request', 'network.response', 'network.body', 'network.error', 'page.lifecycle'])
@@ -57,6 +57,7 @@ async function init(force = false) {
     await loadSettings()
     await ensureAlarm()
     updateBadge('…', BADGE_PAIR, 'DSH Browser Bridge')
+    restoreArmedTabs().catch(() => {})
     // With auto-pair the extension never needs the user to type a code: it
     // discovers the bridge and receives a token over the CORS-gated handshake.
     connect().catch((error) => setError(error))
@@ -70,6 +71,10 @@ async function loadSettings() {
   const port = Number(data[STORAGE.port])
   settings.port = Number.isFinite(port) && port > 0 ? port : null
   settings.autoConnect = data[STORAGE.autoConnect] !== false
+  const storedArmed = data[STORAGE.armedTabs]
+  armedTabs = new Set(Array.isArray(storedArmed)
+    ? storedArmed.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+    : [])
   helloInfo = data[STORAGE.serverVersion] ? { version: data[STORAGE.serverVersion] } : null
 }
 
@@ -375,7 +380,6 @@ function handleSocketMessage(message) {
     setStatus('connected', { serverVersion: message.serverVersion ?? null, hello: message })
     startHeartbeat()
     flushQueue()
-    ensureCollectors().catch(() => {})
     syncActiveTab().catch(() => {})
     return
   }
@@ -527,18 +531,39 @@ async function injectCollector(tabId) {
   await chrome.scripting.executeScript({ target, files: ['content/collector.js'], world: 'MAIN' })
 }
 
-async function ensureCollectors() {
-  if (collectorsRunning) return
-  collectorsRunning = true
-  try {
-    const tabs = await chrome.tabs.query({})
-    const targets = tabs.filter((tab) => tab.id != null && injectable(tab.url)).slice(0, 30)
-    for (let index = 0; index < targets.length; index += 3) {
-      await Promise.all(targets.slice(index, index + 3).map((tab) => injectCollector(tab.id).catch(() => {})))
-    }
-  } finally {
-    collectorsRunning = false
+async function saveArmedTabs() {
+  await chrome.storage.local.set({ [STORAGE.armedTabs]: [...armedTabs] }).catch(() => {})
+}
+
+async function armTab(tabId) {
+  const tab = await chrome.tabs.get(Number(tabId))
+  if (!injectable(tab.url)) {
+    throw makeError('RESTRICTED_PAGE', `page is not injectable: ${tab.url || ''}`)
   }
+  armedTabs.add(tab.id)
+  await saveArmedTabs()
+  await injectCollector(tab.id)
+  return { armed: true, tabId: tab.id, tab: tabInfo(tab) }
+}
+
+async function disarmTab(tabId) {
+  const removed = armedTabs.delete(Number(tabId))
+  if (removed) await saveArmedTabs()
+  return { armed: false, tabId: Number(tabId) }
+}
+
+async function restoreArmedTabs() {
+  let changed = false
+  for (const tabId of [...armedTabs]) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null)
+    if (!tab || !injectable(tab.url)) {
+      armedTabs.delete(tabId)
+      changed = true
+      continue
+    }
+    injectCollector(tabId).catch(() => {})
+  }
+  if (changed) await saveArmedTabs()
 }
 
 function makeError(code, message, details) {
@@ -717,6 +742,12 @@ async function runAction(action, params) {
       // alive and routing even when every tab call is stuck.
       return { pong: Date.now(), version: EXTENSION_VERSION, alive: true }
     }
+    case 'collector.ensure': {
+      return await armTab(params.tabId ?? (await resolveTab()).id)
+    }
+    case 'collector.disarm': {
+      return await disarmTab(params.tabId ?? (await resolveTab()).id)
+    }
     case 'tabs.list': {
       const tabs = await chrome.tabs.query({})
       return {
@@ -781,30 +812,37 @@ async function runAction(action, params) {
     }
     case 'page.snapshot': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'snapshot' }], 'ISOLATED', frameId)
     }
     case 'page.read': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'read' }], 'ISOLATED', frameId)
     }
     case 'page.click': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'click' }], 'ISOLATED', frameId)
     }
     case 'page.type': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'type' }], 'ISOLATED', frameId)
     }
     case 'page.press': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'press' }], 'ISOLATED', frameId)
     }
     case 'page.scroll': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'scroll' }], 'ISOLATED', frameId)
     }
     case 'page.wait': {
       const tab = await resolveTab(params.tabId)
+      await armTab(tab.id)
       return await execPage(tab, pageAction, [{ ...params, action: 'wait' }], 'ISOLATED', frameId)
     }
     case 'page.eval': {
@@ -812,6 +850,7 @@ async function runAction(action, params) {
       if (typeof params.expression !== 'string' || params.expression.trim() === '') {
         throw makeError('BAD_REQUEST', 'expression is required')
       }
+      await armTab(tab.id)
       return await execPage(tab, pageEval, [params.expression, params.awaitPromise !== false], 'MAIN', frameId)
     }
     case 'page.screenshot': {
@@ -946,12 +985,13 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 })
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!connected) return
-  if (changeInfo.status === 'complete') injectCollector(tabId).catch(() => {})
+  if (changeInfo.status === 'complete' && armedTabs.has(Number(tabId))) injectCollector(tabId).catch(() => {})
   if (!changeInfo.url && !changeInfo.title && !changeInfo.status) return
   const change = changeInfo.url ? 'url' : changeInfo.title ? 'title' : 'status'
   sendEvent(tabId, 0, 'tab.updated', { tabId, change, tab: tabInfo(tab) })
 })
 chrome.tabs.onRemoved.addListener((tabId) => {
+  if (armedTabs.delete(Number(tabId))) saveArmedTabs().catch(() => {})
   if (!connected) return
   sendEvent(tabId, 0, 'tab.removed', { tabId })
   seqByTab.delete(tabId)

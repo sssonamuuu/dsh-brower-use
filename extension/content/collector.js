@@ -1,9 +1,10 @@
 /**
  * MAIN world collector.
  *
- * Runs at document_start, before page scripts, and hooks the page's own
- * console/fetch/XHR APIs. It cannot call chrome.runtime directly; events are
- * posted to the isolated relay via window.postMessage.
+ * Injected on demand when the user @-mentions a tab, and re-injected after
+ * navigation for that armed tab. It hooks the page's own console/fetch/XHR
+ * APIs; it cannot call chrome.runtime directly, so events are posted to the
+ * isolated relay via window.postMessage.
  *
  * The guard makes repeated chrome.scripting.executeScript injections safe.
  */

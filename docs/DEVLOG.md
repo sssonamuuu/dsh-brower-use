@@ -7,6 +7,29 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-16 — 采集器改为按需注入，避免反调试误报
+
+### 问题
+
+部分网页会检测 `console` / `fetch` / `XMLHttpRequest` 是否被改写，扩展在
+`document_start` 对所有页面注入 collector 后，这些站点提示「当前环境正在被调试」。
+
+### 改动
+
+- 移除 manifest 的自动 `content_scripts`；不再全局注入 MAIN-world hook
+- `@` 选择标签页时调用 Host `/api/browser-bridge/arm` → 扩展 `collector.ensure`
+- 只注入被选中的标签页；该 tab 导航后自动重新注入
+- `browser_snapshot` / `browser_read` / click 等页面动作在目标 tab 上显式 arm
+- 新增 armedTabs 本地持久化；关闭 tab 自动清理
+- 更新静态测试与文档
+
+### 注意
+
+- console / network 只从注入之后开始记录，页面启动请求仍需刷新后触发
+- 对明确禁止调试的站点，不保证绕过其安全控制
+
+---
+
 ## 2026-11-16 — 多浏览器标签按浏览器连续分组
 
 - `@` 候选排序改为一组浏览器内的标签连续排列（组内 active 优先），
