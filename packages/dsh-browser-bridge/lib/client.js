@@ -116,7 +116,12 @@ window.__ModuleLoader__.load({
     }
 
     function tabValue(tab) {
-      return JSON.stringify({ id: tab.id, title: tab.title ?? '', url: tab.url ?? '' })
+      return JSON.stringify({ id: tab.id, title: tab.title ?? '', url: tab.url ?? '', browser: tab.browser ?? '' })
+    }
+
+    function browserKeyOf(tab, fallback = '') {
+      const style = browserStyle(tab.browser || fallback)
+      return style.name.toLocaleLowerCase()
     }
 
     function parseValue(value) {
@@ -250,12 +255,27 @@ window.__ModuleLoader__.load({
             return []
           }
           const needle = String(query ?? '').trim().toLowerCase()
+          // Keep each browser's tabs contiguous so its section heading is
+          // rendered once; active tabs lead inside each browser group.
+          const fallbackBrowser = data.browser?.brand || data.browser?.browser || ''
+          const browserOrder = new Map()
+          for (const tab of data.tabs) {
+            const key = browserKeyOf(tab, fallbackBrowser)
+            if (!browserOrder.has(key)) browserOrder.set(key, browserOrder.size)
+          }
           return data.tabs
             .filter((tab) => {
               if (!needle) return true
               return `${tab.title ?? ''} ${tab.url ?? ''}`.toLowerCase().includes(needle)
             })
-            .sort((left, right) => Number(right.active === true) - Number(left.active === true))
+            .sort((left, right) => {
+              const leftGroup = browserOrder.get(browserKeyOf(left, fallbackBrowser)) ?? 0
+              const rightGroup = browserOrder.get(browserKeyOf(right, fallbackBrowser)) ?? 0
+              if (leftGroup !== rightGroup) return leftGroup - rightGroup
+              const active = Number(right.active === true) - Number(left.active === true)
+              if (active !== 0) return active
+              return (Number(left.windowId) - Number(right.windowId)) || (Number(left.index) - Number(right.index))
+            })
             .slice(0, 60)
             .map((tab) => {
               const title = tab.title?.trim() || tab.url || `tab ${tab.id}`

@@ -48,6 +48,7 @@ test('client @ source maps open tabs to candidates and serializable references',
             { id: 7, windowId: 1, title: 'Local app', url: 'http://localhost:3000/', favIconUrl: 'http://localhost:3000/favicon.ico', active: true, browser: 'Edge' },
             { id: 8, windowId: 1, title: 'Docs', url: 'http://localhost:3000/docs', favIconUrl: '', active: false, discarded: true, browser: 'Chrome' },
             { id: 9, windowId: 1, title: 'Arc page', url: 'http://localhost:3000/arc', favIconUrl: '', active: false, browser: 'Arc' },
+            { id: 10, windowId: 1, title: 'Another Edge', url: 'http://localhost:3000/edge2', favIconUrl: '', active: false, browser: 'Edge' },
           ],
         }
       },
@@ -68,16 +69,18 @@ test('client @ source maps open tabs to candidates and serializable references',
   assert.equal(source.name, 'browser-tab')
 
   const rows = await source.candidates({}, { query: '', signal: new AbortController().signal })
-  assert.equal(rows.length, 3)
+  assert.equal(rows.length, 4)
   assert.equal(rows[0].name, 'Local app')
   assert.match(textOf(rows[0].section), /Edge 浏览器标签/)
-  assert.match(textOf(rows[1].section), /Chrome 浏览器标签/)
+  assert.equal(rows[1].name, 'Another Edge')
+  assert.equal(rows[1].section, rows[0].section, 'same-browser rows share one section object')
+  assert.match(textOf(rows[2].section), /Chrome 浏览器标签/)
   const edgeLogo = rows[0].section.children.find((child) => child?.type === 'img')
   assert.match(edgeLogo.props.src, /^data:image\/svg\+xml/)
-  assert.match(textOf(rows[2].section), /^A浏览器标签$/)
+  assert.match(textOf(rows[3].section), /^A浏览器标签$/)
   assert.match(rows[0].description, /localhost:3000/)
   assert.match(rows[0].description, /当前/)
-  assert.match(rows[1].description, /已休眠/)
+  assert.match(rows[2].description, /已休眠/)
   assert.equal(typeof rows[0].icon, 'function')
   const icon = rows[0].icon({ size: 14 })
   assert.equal(icon.type, 'span')
