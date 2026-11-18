@@ -167,6 +167,64 @@ export async function apply(ctx, rawConfig = {}) {
         }
       },
     }), 'browser-bridge: arm route')
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/api/browser-bridge/activate',
+      // Same shape as `arm`: side effect plus POST body, so it owns the raw
+      // handler instead of the GET/HEAD `resource` path.
+      handler: async (req, res) => {
+        const origin = req.headers.origin
+        const host = req.headers.host
+        const sameOrigin = origin === `http://${host}` || origin === `https://${host}`
+        if (origin && !sameOrigin && origin !== 'null') {
+          writeJson(res, 403, { ok: false, error: 'forbidden' })
+          return
+        }
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, error: 'method_not_allowed' }, { allow: 'POST' })
+          return
+        }
+        let body = ''
+        try {
+          for await (const chunk of req) {
+            body += chunk
+            if (body.length > 8 * 1024) throw new Error('too large')
+          }
+        } catch {
+          writeJson(res, 413, { ok: false, error: 'payload_too_large' })
+          return
+        }
+        let payload
+        try {
+          payload = JSON.parse(body || '{}')
+        } catch {
+          writeJson(res, 400, { ok: false, error: 'bad_request' })
+          return
+        }
+        const tabId = Number(payload?.tabId)
+        if (!Number.isFinite(tabId)) {
+          writeJson(res, 400, { ok: false, error: 'bad_request', message: 'tabId is required' })
+          return
+        }
+        try {
+          // Focusing a tab is local and cheap; the extension routes it to
+          // whichever browser owns that id.
+          const data = await bridge.command('tabs.activate', { tabId }, {
+            tabId,
+            timeoutMs: 10_000,
+            requiredCaps: ['tabs'],
+          })
+          writeJson(res, 200, { ok: true, tabId, tab: data?.tab ?? null })
+        } catch (error) {
+          const code = error?.code ?? 'ACTIVATE_FAILED'
+          writeJson(res, code === 'NO_CLIENT' ? 503 : 400, {
+            ok: false,
+            error: code,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+      },
+    }), 'browser-bridge: activate route')
   })
 
   await ctx.effect(async () => {

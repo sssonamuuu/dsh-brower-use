@@ -7,6 +7,33 @@ kind: "development-log"
 
 > 记录「做了什么 / 为什么 / 怎么验证 / 还剩什么」。新条目追加在顶部。
 
+## 2026-11-18 — 引用显示为 chip，并可点击激活标签页
+
+### 消息里的引用不再显示成源码
+
+用户反馈：`@` 选完标签页发出后，消息里显示的是 `[Browser tab id=123] 标题 — URL` 这样的
+源码文本，不好看。
+
+根因：`@file` / `@session` 之所以显示成 chip，是因为除了 `codec.serialize` 之外还注册了
+两个扩展点——`ctx.uiConversation.userText.register()` 的同步文本规则，以及
+`conversation.user.text.node` 插槽的 keyed 渲染器。本插件当时只做了序列化，用户文本仍
+走纯文本通道，于是原样显示。
+
+修复：序列化改用与 DSH 会话引用同构的 `@[标题](dsh-browser-tab:<id>?url=<编码后 URL>)`
+（URL 保留在模型可见文本里，不需要额外一次 `browser_tabs`）；注册 `browser-tab` 规则与
+渲染器，样式抄宿主自带 chip（only `--dsw-alias-*` token、hover 才上 business-tertiary
+底色）。另加 `browser-tab-legacy` 规则，让旧格式的历史消息也渲染成 chip。
+
+### chip 可点击激活标签页
+
+需求：消息里的引用 chip 点击后切到对应标签页。
+
+实现：Host 新增同源 `POST /api/browser-bridge/activate { tabId }`，内部就是
+`bridge.command('tabs.activate')`（与 `browser_tabs action=activate` 同一条路径，因此复用
+扩展侧已有处理）。客户端 chip 变成 `role="button"`：点击 / Enter / Space 触发；有非折叠
+文本选区时**不劫持**点击（抄宿主文件 chip 的行为）；请求失败把 chip 标红加删除线，提示里
+换成「无法切换到该标签页」，不再静默。样式仍只用 `--dsw-alias-*` token。
+
 ## 2026-11-16 — 切换到按需 CDP 调试
 
 ### 背景
@@ -123,9 +150,11 @@ service worker 里的 `chrome.tabs.*` Promise 不 resolve：所有需要 tab 的
    `bridge.command('tabs.list')`；只允许同源/`null` Origin，扩展未连接返回 503。
 2. 包增加 client half `lib/client.js`（手写 `window.__ModuleLoader__.load` CJS factory），
    通过 `dsh.client` 声明加载，注册 `@` source `browser-tab`。
-3. 候选：active 优先，显示标题、URL、窗口；选中插入
-   `[Browser tab id=123] 标题 — URL`，模型据此调用 `browser_snapshot {tabId:123}`。
+3. 候选：active 优先，显示标题、URL、窗口；`onPick` 插入引用，发送时由
+   `codec.serialize` 序列化为 `@[标题](dsh-browser-tab:123?url=…)`，模型据此调用
+   `browser_snapshot {tabId:123}`。
 4. 无需构建：client.js 无 React/无 import，直接由 `dsh-client-modules` 提供。
+
 
 ### 验证
 

@@ -133,11 +133,240 @@ window.__ModuleLoader__.load({
       }
     }
 
+    const REF_SCHEME = 'dsh-browser-tab'
+    // Target stays one markdown-safe token: the tab id, plus the URL when it
+    // is needed as context. No spaces, so the link parses everywhere.
+    const WIRE = /@\[([^\]\n]+)\]\(dsh-browser-tab:(\d+)(?:\?url=([^)\s]*))?\)/uy
+    // Messages sent before 0.1.3 carried `[Browser tab id=7] Title — url`.
+    const LEGACY = /\[Browser tab id=(\d+)\]([^\n]*)/uy
+
+    /** One-line label: no brackets, no newlines, bounded length. */
+    function refLabel(tab) {
+      const raw = String(tab.title || tab.url || `tab ${tab.id}`)
+      const flat = raw.replace(/[[\]\n\r]/g, ' ').replace(/\s+/g, ' ').trim()
+      if (flat === '') return `tab ${tab.id}`
+      return flat.length > 120 ? `${flat.slice(0, 119)}…` : flat
+    }
+
+    /**
+     * Percent-encode a URL for a markdown link target. `encodeURIComponent`
+     * leaves `()!'*` alone, and a bare `)` ends the target early, so make those
+     * explicit too — parentheses are common in real page URLs.
+     */
+    function encodeTarget(value) {
+      return encodeURIComponent(value).replace(/[()!'*]/g, (char) =>
+        `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`)
+    }
+
+    /**
+     * Model-facing serialization. The harness renders its own references as
+     * `@[label](dsh-session:…)`; using the same shape here keeps the sent
+     * message one compact token instead of a bracketed pseudo-tag, and the
+     * client rules below turn it back into a chip for display.
+     *
+     * The URL rides along percent-encoded so the model still sees where the
+     * tab points without an extra browser_tabs call.
+     */
     function serialize(ref) {
       const tab = parseValue(ref)
       if (!tab) return String(ref ?? '')
-      const title = tab.title || tab.url || `tab ${tab.id}`
-      return `[Browser tab id=${tab.id}] ${title} — ${tab.url}`
+      const target = tab.url ? `${REF_SCHEME}:${tab.id}?url=${encodeTarget(tab.url)}` : `${REF_SCHEME}:${tab.id}`
+      return `@[${refLabel(tab)}](${target})`
+    }
+
+    /**
+     * Render tab references as inline chips in sent user messages — the same
+     * two extension points the harness's own file/session references use: a
+     * synchronous text rule plus a keyed node renderer.
+     *
+     * Styling mirrors the host's own reference chip: business-primary text, no
+     * resting background, a business-tertiary tint on hover, and the shared
+     * small radius. Hover lives in a stylesheet rather than React state so the
+     * chip is stateless, and only `--dsw-alias-*` tokens are used so light and
+     * dark both follow the host theme.
+     */
+    const CHIP_CSS = `
+.dbb-ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 260px;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  line-height: inherit;
+  vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+@media (hover: hover) {
+  .dbb-ref:hover { background: var(--dsw-alias-state-business-tertiary); }
+}
+.dbb-ref-clickable { cursor: pointer; }
+.dbb-ref:focus-visible { outline: 2px solid var(--dsw-alias-border-selected); outline-offset: 1px; }
+.dbb-ref-failed { color: var(--dsw-alias-state-error-primary); text-decoration: line-through; opacity: 0.7; }
+.dbb-ref-marker { flex: none; font-weight: 500; }
+.dbb-ref-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`
+
+    /** Ask the Host to focus the tab this reference names. */
+    async function activateTab(tabId) {
+      try {
+        const response = await fetch('/api/browser-bridge/activate', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tabId: Number(tabId) }),
+          keepalive: true,
+        })
+        if (response.ok) return { ok: true }
+        const detail = await response.json().catch(() => null)
+        return { ok: false, error: detail?.error ?? 'ACTIVATE_FAILED' }
+      } catch {
+        return { ok: false, error: 'BRIDGE_UNAVAILABLE' }
+      }
+    }
+
+    /** Mount the chip stylesheet once, removed when the plugin unloads. */
+    function ensureChipStyles(ctx) {
+      if (typeof document === 'undefined') return
+      const tagId = '@sssonamuuu/dsh-browser-bridge/tab-chip.css'
+      ctx.effect(() => {
+        if (document.querySelector(`style[data-dbb-css="${tagId}"]`) !== null) return () => {}
+        const tag = document.createElement('style')
+        tag.dataset.dbbCss = tagId
+        tag.textContent = CHIP_CSS
+        document.head.append(tag)
+        return () => tag.remove()
+      }, 'browser-tabs: chip styles')
+    }
+
+    function registerTabChips(ctx) {
+      if (!react || typeof ctx.inject !== 'function') return
+
+      function BrowserTabChip({ node, raw }) {
+        const label = String(node?.data?.label ?? '')
+        const url = String(node?.data?.url ?? '')
+        const tabId = Number(node?.data?.tabId)
+        const usable = Number.isFinite(tabId)
+        // 'idle' | 'failed'; the request itself is short, so a pending state
+        // would only flicker.
+        const [failed, setFailed] = react.useState(false)
+
+        async function onActivate(event) {
+          if (!usable) return
+          // Selecting text that happens to cross the chip must not steal the
+          // click — the host's own reference chips use the same guard.
+          try {
+            if (String(globalThis.getSelection?.() ?? '') !== '') return
+          } catch {
+            // no selection API: proceed
+          }
+          event?.preventDefault?.()
+          const result = await activateTab(tabId)
+          setFailed(!result.ok)
+        }
+
+        function onKeyDown(event) {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault?.()
+          void onActivate(event)
+        }
+
+        const classes = ['dbb-ref']
+        if (usable) classes.push('dbb-ref-clickable')
+        if (failed) classes.push('dbb-ref-failed')
+        return react.createElement(
+          'span',
+          {
+            className: classes.join(' '),
+            // The full reference stays one hover away even when the label
+            // truncates, and the URL is the useful part to reveal.
+            title: failed ? `无法切换到该标签页\n${label}${url ? `\n${url}` : ''}` : (url ? `${label}\n${url}` : raw),
+            role: usable ? 'button' : undefined,
+            tabIndex: usable ? 0 : undefined,
+            onClick: usable ? onActivate : undefined,
+            onKeyDown: usable ? onKeyDown : undefined,
+          },
+          react.createElement('span', { className: 'dbb-ref-marker', 'aria-hidden': true }, '@'),
+          react.createElement('span', { className: 'dbb-ref-label' }, label),
+        )
+      }
+
+      const wireRule = {
+        id: 'browser-tab',
+        order: 20,
+        match(text, from) {
+          for (let start = text.indexOf('@', from); start >= 0; start = text.indexOf('@', start + 1)) {
+            // Cheap reject before running the sticky regex: every decorated
+            // `@` in a draft costs one indexOf, not a backtracking match.
+            if (text.charCodeAt(start + 1) !== 91 /* '[' */) continue
+            WIRE.lastIndex = start
+            const found = WIRE.exec(text)
+            if (found === null) continue
+            let url = ''
+            try {
+              url = found[3] ? decodeURIComponent(found[3]) : ''
+            } catch {
+              url = found[3] ?? ''
+            }
+            return {
+              id: 'browser-tab',
+              start,
+              end: start + found[0].length,
+              data: { tabId: Number(found[2]), label: found[1], url },
+            }
+          }
+          return undefined
+        },
+      }
+
+      // Old spellings stay readable instead of showing as raw brackets.
+      const legacyRule = {
+        id: 'browser-tab-legacy',
+        order: 21,
+        match(text, from) {
+          for (let start = text.indexOf('[Browser tab id=', from); start >= 0; start = text.indexOf('[Browser tab id=', start + 1)) {
+            LEGACY.lastIndex = start
+            const found = LEGACY.exec(text)
+            if (found === null) continue
+            // ` Title — url`. The old serializer put the URL last, and a URL
+            // never contains spaces, so the first run after the separator is
+            // the URL and anything past it is prose the user typed.
+            const rest = (found[2] ?? '').trim()
+            const split = rest.lastIndexOf(' — ')
+            const head = split >= 0 ? rest.slice(0, split).trim() : rest
+            const tail = split >= 0 ? (/^\S+/.exec(rest.slice(split + 3))?.[0] ?? '') : ''
+            const label = (tail ? head : rest) || `tab ${found[1]}`
+            // Stop exactly where the reference ends so trailing prose stays text.
+            const marker = `[Browser tab id=${found[1]}]`
+            let length = marker.length
+            if (head) length += 1 + head.length
+            if (tail) length += 3 + tail.length
+            return {
+              id: 'browser-tab-legacy',
+              start,
+              end: start + length,
+              data: { tabId: Number(found[1]), label, url: tail },
+            }
+          }
+          return undefined
+        },
+      }
+
+      // Wait for the services instead of reading them once: this bundle may
+      // materialize before the conversation UI activates.
+      ctx.inject(['uiConversation', 'slots'], (scope) => {
+        const { uiConversation, slots } = scope
+        scope.effect(() => uiConversation.userText.register(wireRule), 'browser-tabs: user text rule')
+        scope.effect(() => uiConversation.userText.register(legacyRule), 'browser-tabs: legacy user text rule')
+        for (const key of ['browser-tab', 'browser-tab-legacy']) {
+          slots.inject('conversation.user.text.node', () => slots.register(
+            { name: 'conversation.user.text.node', key, priority: 100 },
+            BrowserTabChip,
+          ))
+        }
+      })
     }
 
     function shortLocation(rawUrl) {
@@ -326,6 +555,10 @@ window.__ModuleLoader__.load({
       }
       const inputTriggers = ctx.get('inputTriggers')
       ctx.effect(() => inputTriggers.registerSource(source), 'browser-tabs: @ source')
+      // Optional halves: a Host without the conversation UI still gets the
+      // @ menu, it just shows the reference as plain text.
+      ensureChipStyles(ctx)
+      registerTabChips(ctx)
     }
 
     const inject = ['inputTriggers']

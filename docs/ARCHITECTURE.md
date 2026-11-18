@@ -179,13 +179,19 @@ Web composer 输入 @
   → bridge.command('tabs.list')                  （WS 到扩展）
   → 返回 {browser:{brand}, tabs:[{id,title,url,favIconUrl,active,…}]}
   → 候选行按「浏览器图标 + Edge/Chrome 浏览器标签」分组，行首显示 favicon
-  → 选中插入 [Browser tab id=123] 标题 — URL
+  → 选中插入引用，发送时序列化为 `@[标题](dsh-browser-tab:123?url=…)`
   → 模型看到引用，调用 browser_snapshot {tabId:123}
 ```
 
+引用在消息里显示为行内 chip，与 DSH 自带的文件/会话引用同一套扩展点：`lib/client.js` 通过
+`ctx.uiConversation.userText.register()` 注册同步匹配规则，再向 `conversation.user.text.node`
+插槽注册 keyed 渲染器。旧版本发出的 `[Browser tab id=…] … — …` 文本也由 `browser-tab-legacy`
+规则兼容渲染，历史消息不会露出源码。
+
 Host 路由是精确路径 `/api/browser-bridge/tabs`，只允许同源或 `null` Origin，避免其他网页读取
-标签页标题/URL。`lib/client.js` 是手写的 `window.__ModuleLoader__.load` 客户端 bundle，
-不依赖 React，也不需要构建步骤。
+标签页标题/URL。另两条同源 POST：`/arm`（选页后按需 attach 调试器）与 `/activate`
+（点击消息里的 chip 时调 `tabs.activate` 切到该标签页）。`lib/client.js` 是手写的
+`window.__ModuleLoader__.load` 客户端 bundle，不依赖 React，也不需要构建步骤。
 
 ## 7. 浏览器兼容策略
 

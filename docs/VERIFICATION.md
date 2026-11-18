@@ -150,8 +150,24 @@ node scripts/e2e-chrome.mjs --auto
 - Host 路由 `GET http://127.0.0.1:56668/api/browser-bridge/tabs`（同源、无浏览器扩展
   Origin）在 Edge 已连接时返回真实 tabs：`{ ok:true, tabs:[…] }`；扩展断开时返回
   `503 NO_CLIENT`。
-- `client.js` 单测：输入两枚 tab，`@` source 生成候选、按 query 过滤、`onPick` 插入
-  `[Browser tab id=…]`、`codec.serialize` 生成模型文本。
+- `client.js` 单测：输入两枚 tab，`@` source 生成候选、按 query 过滤、`onPick` 插入引用、
+  `codec.serialize` 生成模型文本 `@[标题](dsh-browser-tab:<id>?url=…)`；另有一例按宿主
+  的「最早起点优先」规则做整篇文本归约，断言 prologue/引用/尾部三者无缝覆盖、散文不误伤、
+  旧格式 `[Browser tab id=…]` 仍能匹配并保留其后的句子。
+- chip 注册项（用与 Web loader 相同的方式物化 bundle 后核对）：规则
+  `browser-tab(order 20)`、`browser-tab-legacy(order 21)`；渲染器同名两条；样式表注入 1 个
+  `<style>`，仅含 `--dsw-alias-state-business-primary`、`--dsw-alias-state-business-tertiary`、
+  `--dsw-alias-border-selected`、`--dsw-alias-state-error-primary`、`--dsw-radius-sm`。
+- 用户实测确认：发送后的消息已显示为行内 chip（此前是源码文本）。
+- 点击激活：Host 路由单测覆盖 403 跨源、405 非 POST、400 缺 tabId / 非法 body、
+  503 `NO_CLIENT`（扩展未连接）；客户端单测覆盖点击 payload `{tabId}`、成功不置错、
+  失败置错、有文本选区时不触发、Enter/Space 触发。底层 `tabs.activate` 由
+  `tools.test.js` 的 FakeExtension 端到端覆盖，`/activate` 路由只是复用该命令。
+- Host 路由在真实 Edge 上实测（宿主重启后）：`POST /activate {tabId:2142824295}` 返回
+  `200 {"ok":true,…}`，`tabs` 的 active id 由 `2142824295` 切到 `2142824537` 再切回，
+  证明焦点真的移动；跨源 `403`、GET `405`、缺 `tabId` `400` 与单测一致。
+- **未验证**：页面内**点击 chip** 触发该路由这一段（同一 bundle 的 `serialize` 已由新格式
+  文本证明在运行，但点击本身需要用户在真实消息里点一次）。
 - `GET /api/browser-bridge/client-status` 返回：
   `{"ok":true,"hasService":true,"clientPath":"/Users/.../lib/client.js","error":null}`，
   说明 client bundle 已进入 DSH client-modules 图。
