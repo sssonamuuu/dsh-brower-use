@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { makeBridge, FakeExtension } from './helpers.js'
 import { registerBrowserTools } from '../lib/tools.js'
+import { PACKAGE_VERSION } from '../lib/protocol.js'
 
 async function makeToolkit(t, fakeOptions) {
   const { bridge, cleanup } = await makeBridge()
@@ -28,7 +29,9 @@ function execute(definitions, name, args = {}) {
 test('browser_status reports auto-pair and connection state', async (t) => {
   const { bridge, definitions } = await makeToolkit(t)
   const text = await execute(definitions, 'browser_status')
-  assert.match(text, /DSH Browser Bridge v0\.1\.2/)
+  // The reported version must follow the package version, so a release bump
+  // cannot silently leave the status line stale.
+  assert.match(text, new RegExp(`DSH Browser Bridge v${PACKAGE_VERSION.replaceAll('.', '\\.')}`))
   assert.match(text, /Auto-pair: enabled/)
   assert.match(text, /Extension: connected/)
   assert.match(text, /TestChrome 999\.0\.0\.0/)

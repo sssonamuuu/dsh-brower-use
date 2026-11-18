@@ -144,7 +144,7 @@ npm pack --dry-run
 注册表不允许覆盖已发布版本，所以**每次发布前必须先升版本号**：
 
 ```bash
-npm version patch   # 0.1.2 -> 0.1.3
+npm version patch   # 升修订号；注册表不允许覆盖已发布版本
 ```
 
 确认打包列表包含：
@@ -171,13 +171,13 @@ npm publish --access public
 DSH → **Plugins → Add plugin**：
 
 ```text
-@sssonamuuu/dsh-browser-bridge@0.1.2
+@sssonamuuu/dsh-browser-bridge@0.1.3
 ```
 
 或在 Agent 中使用：
 
 ```text
-plugin_manager install_bundle target=@sssonamuuu/dsh-browser-bridge@0.1.2
+plugin_manager install_bundle target=@sssonamuuu/dsh-browser-bridge@0.1.3
 ```
 
 也可以直接从 Git 安装（适合未发 npm 的预发布）：
@@ -231,7 +231,7 @@ DSH 默认没有第三方插件索引。要出现在 Discover：
       },
       "versions": [
         {
-          "version": "0.1.2",
+          "version": "0.1.3",
           "publishTimestamp": 1760000000,
           "source": { "type": "npm" },
           "engines": { "dsh": ">=0.2.2-rc.1" }
@@ -249,14 +249,14 @@ DSH 默认没有第三方插件索引。要出现在 Discover：
 发布 tag 和附件也能作为团队分发渠道：
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 在 GitHub Release 上传：
 
 - `dist/dsh-browser-bridge-0.1.2-chromium.zip`
-- `npm pack` 得到的 `sssonamuuu-dsh-browser-bridge-0.1.2.tgz`
+- `npm pack` 得到的 `sssonamuuu-dsh-browser-bridge-0.1.3.tgz`
 
 ## 四、常见失败
 

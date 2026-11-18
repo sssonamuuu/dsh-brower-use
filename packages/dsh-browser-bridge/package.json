@@ -1,6 +1,6 @@
 {
   "name": "@sssonamuuu/dsh-browser-bridge",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "DSH browser bridge: inspect and debug the user's real Chrome/Edge tabs through a local browser extension bridge.",
   "type": "module",
   "main": "lib/index.js",

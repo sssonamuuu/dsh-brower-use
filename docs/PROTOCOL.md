@@ -22,7 +22,7 @@ kind: "protocol-reference"
 {
   "app": "dsh-browser-bridge",
   "protocol": 1,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "autoPair": true,
   "pairing": true,
   "port": 47821
@@ -51,7 +51,7 @@ kind: "protocol-reference"
 成功 `200`：
 
 ```json
-{ "ok": true, "token": "64 hex chars", "protocol": 1, "port": 47821, "serverVersion": "0.1.2" }
+{ "ok": true, "token": "64 hex chars", "protocol": 1, "port": 47821, "serverVersion": "0.1.3" }
 ```
 
 失败：
@@ -108,7 +108,7 @@ CORS：只有 `Origin: chrome-extension://…` 会收到
 
 ```json
 {"type":"command","id":"c_1","action":"system.ping","params":{}}
-{"type":"result","id":"c_1","ok":true,"data":{"pong":1770000000000,"version":"0.1.2","alive":true}}
+{"type":"result","id":"c_1","ok":true,"data":{"pong":1770000000000,"version":"0.1.3","alive":true}}
 ```
 
 用途：区分「扩展没连上」和「扩展 socket 在但 service worker 的 `chrome.*` 挂死」。
@@ -161,7 +161,7 @@ Host 校验 `protocol === 1`，回复：
 {
   "type": "hello_ok",
   "protocol": 1,
-  "serverVersion": "0.1.2",
+  "serverVersion": "0.1.3",
   "sessionId": "…",
   "heartbeatMs": 20000,
   "limits": { "maxCommandBytes": 8388608, "maxEventBytes": 262144 }
